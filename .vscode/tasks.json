@@ -1,0 +1,81 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Run Wallet Service",
+            "type": "shell",
+            "command": "npm run start:dev",
+            "options": {
+                "cwd": "${workspaceFolder}/user-wallet"
+            },
+            "isBackground": true,
+            "problemMatcher": "$tsc-watch"
+        },
+        {
+            "label": "Run Transaction Service",
+            "type": "shell",
+            "command": "npm run start:dev",
+            "options": {
+                "cwd": "${workspaceFolder}/transaction"
+            },
+            "isBackground": true,
+            "problemMatcher": "$tsc-watch"
+        },
+        {
+            "label": "Run Ledger Service",
+            "type": "shell",
+            "command": "npm run start:dev",
+            "options": {
+                "cwd": "${workspaceFolder}/ledger"
+            },
+            "isBackground": true,
+            "problemMatcher": "$tsc-watch"
+        },
+        {
+            "label": "Run FX Service",
+            "type": "shell",
+            "command": "npm run start:dev",
+            "options": {
+                "cwd": "${workspaceFolder}/fx"
+            },
+            "isBackground": true,
+            "problemMatcher": "$tsc-watch"
+        },
+        {
+            "label": "Run Gateway Service",
+            "type": "shell",
+            "command": "npm run start:dev",
+            "options": {
+                "cwd": "${workspaceFolder}/gateway"
+            },
+            "isBackground": true,
+            "problemMatcher": "$tsc-watch"
+        },
+        {
+            "label": "Run Payroll Service",
+            "type": "shell",
+            "command": "npm run start:dev",
+            "options": {
+                "cwd": "${workspaceFolder}/payroll"
+            },
+            "isBackground": true,
+            "problemMatcher": "$tsc-watch"
+        },
+        {
+            "label": "Run All Services",
+            "dependsOn": [
+                "Run Wallet Service",
+                "Run Transaction Service",
+                "Run Ledger Service",
+                "Run FX Service",
+                "Run Gateway Service",
+                "Run Payroll Service"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": []
+        }
+    ]
+}
