@@ -7,6 +7,6 @@ export class AppController {
 
   @Get()
   getHello(): string {
-    return 'Helo - From - Fx'
+    return "Hello - From - Fx"
   }
 }

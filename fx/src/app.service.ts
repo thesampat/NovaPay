@@ -1,17 +1,10 @@
-import { Injectable } from '@nestjs/common';
-import { Redis } from 'ioredis';
+import { Inject, Injectable } from '@nestjs/common';
+import Redis from 'ioredis';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class AppService {
-  private readonly redis: Redis;
-
-  constructor() {
-    this.redis = new Redis({
-      host: 'localhost',
-      port: 6379,
-    });
-  }
+  constructor(@Inject('REDIS_CLIENT') private readonly redis: Redis) {}
 
   async createQuote(base: string, target: string) {
     const rate = await this.getMockRate(base, target);
@@ -63,7 +56,6 @@ export class AppService {
     const baseRate = fluctuate(rawBaseRate);
     const targetRate = fluctuate(rawTargetRate);
 
-    // Formula: (1 / baseRate) * targetRate
     return Number(((1 / baseRate) * targetRate).toFixed(4));
   }
 }

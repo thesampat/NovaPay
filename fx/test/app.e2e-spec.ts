@@ -11,17 +11,24 @@ describe('AppController (e2e)', () => {
   beforeEach(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider('REDIS_CLIENT')
+      .useValue({
+        set: jest.fn(),
+        get: jest.fn(),
+        del: jest.fn(),
+      })
+      .compile();
 
     app = moduleFixture.createNestApplication();
     await app.init();
   });
 
-  it('/ (GET)', () => {
+  it('should return "Hello - From - Fx"', () => {
     return request(app.getHttpServer())
       .get('/')
       .expect(200)
-      .expect('Hello World!');
+      .expect("Hello - From - Fx");
   });
 
   afterEach(async () => {
@@ -31,22 +38,3 @@ describe('AppController (e2e)', () => {
 
 
 
-describe('get mock rate', () => {
-  let app: AppService;
-
-  beforeEach(() => {
-    app = new AppService();
-  });
-
-  Array.from({ length: 10 }, (_, i) => {
-    it('should return the mock rate for the given currencies', () => {
-      const rate = app.getMockRate('USD', 'EUR');
-      console.log(rate)
-    });
-
-    it('should return the mock rate for the given currencies', () => {
-      const rate = app.getMockRate('EUR', 'USD');
-      console.log(rate)
-    });
-  })
-});
