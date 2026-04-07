@@ -1,0 +1,252 @@
+name: NovaPay CI – Smart Monorepo Pipeline
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+
+# Each job only runs when its service directory has changed.
+# Docker images are only pushed on merges to main/master (not on PRs).
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}/novapay
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────
+  # 1. DETECT: figure out which services have changed files
+  # ─────────────────────────────────────────────────────────────────────
+  detect-changes:
+    name: Detect Changed Services
+    runs-on: ubuntu-latest
+    outputs:
+      gateway:     ${{ steps.filter.outputs.gateway }}
+      fx:          ${{ steps.filter.outputs.fx }}
+      ledger:      ${{ steps.filter.outputs.ledger }}
+      payroll:     ${{ steps.filter.outputs.payroll }}
+      transaction: ${{ steps.filter.outputs.transaction }}
+      user-wallet: ${{ steps.filter.outputs.user-wallet }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history needed for accurate diff
+
+      - name: Filter changed paths per service
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            gateway:
+              - 'gateway/**'
+            fx:
+              - 'fx/**'
+            ledger:
+              - 'ledger/**'
+            payroll:
+              - 'payroll/**'
+            transaction:
+              - 'transaction/**'
+            user-wallet:
+              - 'user-wallet/**'
+
+  # ─────────────────────────────────────────────────────────────────────
+  # 2. ENFORCE: every changed service must bump its version in package.json
+  # ─────────────────────────────────────────────────────────────────────
+  enforce-version-bump:
+    name: Enforce Version Bump (${{ matrix.service }})
+    needs: detect-changes
+    runs-on: ubuntu-latest
+    # Only run for services that actually changed
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: gateway
+            changed: ${{ needs.detect-changes.outputs.gateway }}
+          - service: fx
+            changed: ${{ needs.detect-changes.outputs.fx }}
+          - service: ledger
+            changed: ${{ needs.detect-changes.outputs.ledger }}
+          - service: payroll
+            changed: ${{ needs.detect-changes.outputs.payroll }}
+          - service: transaction
+            changed: ${{ needs.detect-changes.outputs.transaction }}
+          - service: user-wallet
+            changed: ${{ needs.detect-changes.outputs['user-wallet'] }}
+    if: ${{ matrix.changed == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check that package.json version was bumped
+        run: |
+          SERVICE="${{ matrix.service }}"
+          PKG="$SERVICE/package.json"
+
+          # Get the version on the base branch (target of the PR)
+          BASE_VERSION=$(git show origin/${{ github.base_ref || 'main' }}:$PKG 2>/dev/null \
+            | node -pe "JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).version" \
+            || echo "0.0.0")
+
+          # Get the version in the current commit
+          CURRENT_VERSION=$(node -pe "require('./$PKG').version")
+
+          echo "Base version :  $BASE_VERSION"
+          echo "Current version: $CURRENT_VERSION"
+
+          if [ "$BASE_VERSION" = "$CURRENT_VERSION" ]; then
+            echo "::error file=$PKG::Version was NOT bumped for $SERVICE. \
+          A version bump in package.json is required alongside every code change."
+            exit 1
+          fi
+          echo "✅  Version bumped: $BASE_VERSION → $CURRENT_VERSION"
+
+  # ─────────────────────────────────────────────────────────────────────
+  # 3. TEST: run Jest only for changed services (blocks the merge)
+  # ─────────────────────────────────────────────────────────────────────
+  test:
+    name: Test – ${{ matrix.service }}
+    needs: [detect-changes, enforce-version-bump]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false        # run all changed services, report individually
+      matrix:
+        include:
+          - service: gateway
+            changed: ${{ needs.detect-changes.outputs.gateway }}
+          - service: fx
+            changed: ${{ needs.detect-changes.outputs.fx }}
+          - service: ledger
+            changed: ${{ needs.detect-changes.outputs.ledger }}
+          - service: payroll
+            changed: ${{ needs.detect-changes.outputs.payroll }}
+          - service: transaction
+            changed: ${{ needs.detect-changes.outputs.transaction }}
+          - service: user-wallet
+            changed: ${{ needs.detect-changes.outputs['user-wallet'] }}
+    if: ${{ matrix.changed == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+          cache-dependency-path: ${{ matrix.service }}/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ${{ matrix.service }}
+        run: npm ci
+
+      - name: Run unit tests
+        working-directory: ${{ matrix.service }}
+        run: npm test -- --forceExit --ci
+
+  # ─────────────────────────────────────────────────────────────────────
+  # 4. BUILD & TAG: build Docker images for changed services
+  #    Images are tagged with the semver from package.json.
+  #    Push to GHCR only on merges to main/master.
+  # ─────────────────────────────────────────────────────────────────────
+  docker-build:
+    name: Docker – ${{ matrix.service }}
+    needs: [detect-changes, test]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: gateway
+            changed: ${{ needs.detect-changes.outputs.gateway }}
+          - service: fx
+            changed: ${{ needs.detect-changes.outputs.fx }}
+          - service: ledger
+            changed: ${{ needs.detect-changes.outputs.ledger }}
+          - service: payroll
+            changed: ${{ needs.detect-changes.outputs.payroll }}
+          - service: transaction
+            changed: ${{ needs.detect-changes.outputs.transaction }}
+          - service: user-wallet
+            changed: ${{ needs.detect-changes.outputs['user-wallet'] }}
+    if: ${{ matrix.changed == 'true' }}
+    permissions:
+      contents: read
+      packages: write   # needed to push to GHCR
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read semver from package.json
+        id: version
+        run: |
+          VERSION=$(node -pe "require('./${{ matrix.service }}/package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "image=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.service }}-service" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        # Only needed when we actually push (merges to main/master)
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build (and optionally push) Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./${{ matrix.service }}
+          file: ./${{ matrix.service }}/Dockerfile
+          # Push only on real merges, not on PR checks
+          push: ${{ github.event_name == 'push' }}
+          tags: |
+            ${{ steps.version.outputs.image }}:${{ steps.version.outputs.version }}
+            ${{ steps.version.outputs.image }}:latest
+          # Layer cache speeds up repeated builds
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to:   type=gha,scope=${{ matrix.service }},mode=max
+
+      - name: Annotate summary
+        run: |
+          echo "### 🐳 Docker build – ${{ matrix.service }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| Image | \`${{ steps.version.outputs.image }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tag | \`${{ steps.version.outputs.version }}\` |" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "| Pushed | ✅ yes |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Pushed | 🔍 dry-run (PR only) |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ─────────────────────────────────────────────────────────────────────
+  # 5. GATE: single required status check that GitHub branch protection
+  #    can point to. It only succeeds when everything upstream passes.
+  # ─────────────────────────────────────────────────────────────────────
+  ci-gate:
+    name: ✅ CI Gate
+    if: always()   # must always run so it can report failure on skipped jobs
+    needs: [test, docker-build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check all upstream results
+        run: |
+          TEST_RESULT="${{ needs.test.result }}"
+          BUILD_RESULT="${{ needs.docker-build.result }}"
+
+          echo "test result:         $TEST_RESULT"
+          echo "docker-build result: $BUILD_RESULT"
+
+          # 'skipped' means no service changed → pass through
+          # 'success' or 'skipped' are the only acceptable outcomes
+          if [[ "$TEST_RESULT" == "failure" || "$BUILD_RESULT" == "failure" ]]; then
+            echo "::error::CI Gate FAILED – tests or Docker build did not pass."
+            exit 1
+          fi
+
+          echo "CI Gate passed ✅"

@@ -1,0 +1,143 @@
+version: '3.8'
+
+services:
+  # Databases & Cache
+  mongodb:
+    image: mongo:latest
+    volumes:
+      - mongodb_data:/data/db
+
+  redis:
+    image: redis:alpine
+    volumes:
+      - redis_data:/data
+
+
+  # Microservices
+  gateway:
+    build:
+      context: ./gateway
+      target: builder
+    # Use watch mode for real-time changes
+    command: npm run start:dev
+    environment:
+      - SERVICE_NAME=gateway
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./gateway/src:/usr/src/app/src
+    depends_on:
+      - user-wallet
+      - transaction
+      - payroll
+      - fx
+      - ledger
+
+  user-wallet:
+    build:
+      context: ./user-wallet
+      target: builder
+    command: npm run start:dev
+    environment:
+      - SERVICE_NAME=user-wallet
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./user-wallet/src:/usr/src/app/src
+    depends_on:
+      - mongodb
+
+  transaction:
+    build:
+      context: ./transaction
+      target: builder
+    command: npm run start:dev
+    environment:
+      - SERVICE_NAME=transaction
+    ports:
+      - "3002:3002"
+    volumes:
+      - ./transaction/src:/usr/src/app/src
+    depends_on:
+      - user-wallet
+      - ledger
+      - fx
+
+  ledger:
+    build:
+      context: ./ledger
+      target: builder
+    command: npm run start:dev
+    environment:
+      - SERVICE_NAME=ledger
+    ports:
+      - "3003:3003"
+    volumes:
+      - ./ledger/src:/usr/src/app/src
+    depends_on:
+      - mongodb
+
+  fx:
+    build:
+      context: ./fx
+      target: builder
+    command: npm run start:dev
+    environment:
+      - SERVICE_NAME=fx
+    ports:
+      - "3004:3004"
+    volumes:
+      - ./fx/src:/usr/src/app/src
+    depends_on:
+      - redis
+
+  payroll:
+    build:
+      context: ./payroll
+      target: builder
+    command: npm run start:dev
+    environment:
+      - SERVICE_NAME=payroll
+    ports:
+      - "3005:3005"
+    volumes:
+      - ./payroll/src:/usr/src/app/src
+    depends_on:
+      - redis
+      - transaction
+
+  # Observability
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "30010:3000" # Map to 30010 to avoid conflicting with Gateway
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+
+  otel-collector:
+    image: otel/opentelemetry-collector:latest
+    command: ["--config=/etc/otel-collector-config.yml"]
+    volumes:
+      - ./monitoring/otel-collector-config.yml:/etc/otel-collector-config.yml
+    ports:
+      - "8888:8888"
+      - "8889:8889"
+      - "13133:13133"
+      - "4318:4318"
+
+volumes:
+  mongodb_data:
+  redis_data:

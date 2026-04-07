@@ -24,7 +24,11 @@ import { BullModule } from '@nestjs/bullmq';
     BullModule.registerQueue({
       name: 'payroll',
     }),
+    BullModule.registerFlowProducer({
+      name: 'payroll-flow',
+    }),
   ],
+
   controllers: [AppController],
   providers: [AppService],
 })

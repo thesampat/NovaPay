@@ -4,29 +4,32 @@ import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class AppService {
-  constructor(@Inject('REDIS_CLIENT') private readonly redis: Redis) {}
+  constructor(@Inject('REDIS_CLIENT') private readonly redis: Redis) { }
 
-  async createQuote(base: string, target: string) {
+  async getRate(base: string, target: string) {
+    const existing = await this.redis.get(`rate:${target}`);
+    if (existing) {
+      return JSON.parse(existing);
+    }
+
+    // Otherwise, generate a new one and lock it for 60s
     const rate = await this.getMockRate(base, target);
-    const quoteId = uuidv4();
-    const quoteData = {
+    const rateData = {
       rate,
       base,
       target,
       expiry: Date.now() + 60000,
     };
 
-    await this.redis.set(`quote:${quoteId}`, JSON.stringify(quoteData), 'EX', 60);
-    return { quoteId, ...quoteData };
+    await this.redis.set(`rate:${target}`, JSON.stringify(rateData), 'EX', 60);
+    return rateData;
   }
 
-  async verifyQuote(quoteId: string) {
-    const data = await this.redis.get(`quote:${quoteId}`);
-    if (!data) return null;
-
-    await this.redis.del(`quote:${quoteId}`);
-    return JSON.parse(data);
+  async clearRate(currency: string) {
+    await this.redis.del(`rate:${currency}`);
+    return { status: 'cleared' };
   }
+
 
   async getMockRate(base: string, target: string): Promise<number> {
     if (base === target) return 1.0;

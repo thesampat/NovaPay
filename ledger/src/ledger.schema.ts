@@ -9,9 +9,14 @@ const LedgerSchema = new mongoose.Schema<ILedgerEntry>({
   currency: { type: String, required: true },
   fx_rate: { type: Number, required: true },
   description: { type: String },
+  current_hash: { type: String, required: true },
+  previous_hash: { type: String, required: true },
+  status: { type: String, enum: ['PENDING', 'COMPLETED', 'FAILED'], default: 'PENDING' },
 }, {
-  timestamps: { createdAt: 'timestamp', updatedAt: false }
+  timestamps: { createdAt: 'timestamp', updatedAt: true }
 });
+
+
 
 LedgerSchema.index({ account_id: 1, timestamp: -1 });
 

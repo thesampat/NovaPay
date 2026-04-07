@@ -9,8 +9,13 @@ export class CheckBalanceDtoTs {
 export class PayDtoTs {
     @IsNumber()
     sender: number
+
     @IsNumber()
     receiver: number
+
     @IsNumber()
     amount: number
+
+    @IsString()
+    transactionId: string
 }
