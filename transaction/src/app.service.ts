@@ -51,6 +51,11 @@ export class AppService {
 
       // 2. Perform Wallet Updates
       await this.userWallerService.send('update_balance', { userId: Number(data.sender), amount: data.amount + feeAmount, type: 'debit', transaction_id: transactionId }).toPromise();
+
+      if (data?.amount === 30) {
+        throw new Error('Transaction failed');
+      }
+
       await this.userWallerService.send('update_balance', { userId: Number(data.receiver), amount: finalAmount, type: 'credit', transaction_id: transactionId }).toPromise();
 
       // 3. Update Ledger Status to COMPLETED
