@@ -146,7 +146,111 @@ jobs:
         run: npm test -- --forceExit --ci
 
   # ─────────────────────────────────────────────────────────────────────
-  # 4. BUILD & TAG: build Docker images for changed services
+  # 4. K6 SMOKE: spin up the stack and run the k6 smoke scenario
+  #    Runs on every push/PR to catch regressions in transaction flows.
+  # ─────────────────────────────────────────────────────────────────────
+  k6-load-test:
+    name: k6 Transaction Smoke Test
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Install k6 ──────────────────────────────────────────────────
+      - name: Install k6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring \
+            --keyring /usr/share/keyrings/k6-archive-keyring.gpg \
+            --keyserver hkp://keyserver.ubuntu.com:80 \
+            --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" \
+            | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update -qq
+          sudo apt-get install -y k6
+
+      # ── Start all services ───────────────────────────────────────────
+      - name: Start Docker Compose stack
+        run: docker compose up -d --build
+        env:
+          COMPOSE_HTTP_TIMEOUT: 120
+
+      # ── Wait for Gateway to become healthy ───────────────────────────
+      - name: Wait for Gateway (port 3000)
+        run: |
+          echo "Waiting for Gateway …"
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000 > /dev/null 2>&1; then
+              echo "Gateway is up ✅"
+              exit 0
+            fi
+            echo "  attempt $i/30 – not ready yet, sleeping 5 s …"
+            sleep 5
+          done
+          echo "::error::Gateway did not become healthy within 150 s"
+          docker compose logs gateway
+          exit 1
+
+      # ── Create reports directory ─────────────────────────────────────
+      - name: Prepare reports directory
+        run: mkdir -p k6/reports
+
+      # ── Run k6 smoke test ────────────────────────────────────────────
+      - name: Run k6 smoke scenario
+        run: |
+          k6 run \
+            --env SCENARIO=smoke \
+            --env BASE_URL=http://localhost:3000 \
+            --summary-export=k6/reports/summary.json \
+            k6/transactions.test.js
+        # Exit 0 on threshold breaches so we can still upload the report;
+        # the step below re-exits with failure if k6 did not pass.
+        continue-on-error: true
+        id: k6_run
+
+      # ── Upload JSON report as a build artifact ───────────────────────
+      - name: Upload k6 report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-summary-${{ github.run_id }}
+          path: k6/reports/summary.json
+          retention-days: 14
+
+      # ── Print summary to job log ─────────────────────────────────────
+      - name: Print k6 summary
+        if: always()
+        run: |
+          echo "### k6 Smoke Test Report" >> $GITHUB_STEP_SUMMARY
+          echo '```json' >> $GITHUB_STEP_SUMMARY
+          cat k6/reports/summary.json | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          m = d.get('metrics', {})
+          def p(name, key='p(95)'):
+              v = m.get(name, {}).get('values', {})
+              return v.get(key, v.get('avg', 'n/a'))
+          print(f'  http_req_duration p(95) : {p(\"http_req_duration\")} ms')
+          print(f'  tx_duration_ms    p(95) : {p(\"tx_duration_ms\")} ms')
+          print(f'  tx_failure_rate         : {p(\"tx_failure_rate\", \"rate\")}')
+          print(f'  tx_success_total        : {p(\"tx_success_total\", \"count\")}')
+          " 2>/dev/null || cat k6/reports/summary.json
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      # ── Fail the job if k6 thresholds were breached ──────────────────
+      - name: Fail if k6 thresholds breached
+        if: steps.k6_run.outcome == 'failure'
+        run: |
+          echo "::error::k6 thresholds were breached – see the uploaded summary for details."
+          exit 1
+
+      # ── Tear down the stack ──────────────────────────────────────────
+      - name: Tear down Docker Compose stack
+        if: always()
+        run: docker compose down -v
+
+  # ─────────────────────────────────────────────────────────────────────
+  # 5. BUILD & TAG: build Docker images for changed services
   #    Images are tagged with the semver from package.json.
   #    Push to GHCR only on merges to main/master.
   # ─────────────────────────────────────────────────────────────────────

@@ -8,7 +8,8 @@ export class AppService {
   constructor(
     @Inject('USER_WALLET_SERVICE') private userWalletClient: ClientProxy,
     @Inject('TRANSACTION_SERVICE') private transactionClient: ClientProxy,
-    @Inject('PAYROLL_SERVICE') private payrollClient: ClientProxy
+    @Inject('PAYROLL_SERVICE') private payrollClient: ClientProxy,
+    @Inject('ADMIN_SERVICE') private adminClient: ClientProxy
   ) { }
 
   getHello(): string {
@@ -49,6 +50,18 @@ export class AppService {
 
   getPayrollStatus(id: string) {
     return this.payrollClient.send('get_status', { batchId: id });
+  }
+
+  adminGetUsers() {
+    return this.adminClient.send('admin_get_users', {});
+  }
+
+  adminGetLedgers() {
+    return this.adminClient.send('admin_get_ledgers', {});
+  }
+
+  adminGetStats() {
+    return this.adminClient.send('admin_get_stats', {});
   }
 }
 

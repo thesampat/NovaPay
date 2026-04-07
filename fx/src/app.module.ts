@@ -12,7 +12,7 @@ import { AppService } from './app.service';
       provide: 'REDIS_CLIENT',
       useFactory: () => {
         return new Redis({
-          host: 'localhost',
+          host: process.env.SERVICE_NAME ? 'redis' : '127.0.0.1',
           port: 6379,
         });
       },

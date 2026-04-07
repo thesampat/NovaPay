@@ -10,16 +10,16 @@ import { BullModule } from '@nestjs/bullmq';
       {
         name: 'USER_WALLET_SERVICE',
         transport: Transport.TCP,
-        options: { host: '127.0.0.1', port: 3001 },
+        options: { host: process.env.SERVICE_NAME ? 'user-wallet' : '127.0.0.1', port: 3001 },
       },
       {
         name: 'TRANSACTION_SERVICE',
         transport: Transport.TCP,
-        options: { host: '127.0.0.1', port: 3002 },
+        options: { host: process.env.SERVICE_NAME ? 'transaction' : '127.0.0.1', port: 3002 },
       }
     ]),
     BullModule.forRoot({
-      connection: { host: '127.0.0.1', port: 6379 },
+      connection: { host: process.env.SERVICE_NAME ? 'redis' : '127.0.0.1', port: 6379 },
     }),
     BullModule.registerQueue({
       name: 'payroll',

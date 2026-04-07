@@ -106,6 +106,20 @@ services:
       - redis
       - transaction
 
+  admin:
+    build:
+      context: ./admin
+      target: builder
+    command: npm run start:dev
+    environment:
+      - SERVICE_NAME=admin
+    ports:
+      - "3006:3006"
+    volumes:
+      - ./admin/src:/usr/src/app/src
+    depends_on:
+      - mongodb
+
   # Observability
   jaeger:
     image: jaegertracing/all-in-one:latest

@@ -7,7 +7,7 @@ import { UserModel, UserSchema } from './user.schema';
 
 @Module({
   imports: [
-    MongooseModule.forRoot('mongodb://localhost/users'),
+    MongooseModule.forRoot(process.env.SERVICE_NAME ? 'mongodb://mongodb:27017/users' : 'mongodb://localhost/users'),
     MongooseModule.forFeature([{ name: 'Users', schema: UserSchema }])
   ],
   controllers: [AppController],

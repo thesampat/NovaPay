@@ -35,5 +35,20 @@ export class AppController {
   getPayrollStatus(@Param('id') id: string) {
     return this.appService.getPayrollStatus(id);
   }
+
+  @Get('admin/users')
+  getAdminUsers() {
+    return this.appService.adminGetUsers();
+  }
+
+  @Get('admin/ledgers')
+  getAdminLedgers() {
+    return this.appService.adminGetLedgers();
+  }
+
+  @Get('admin/stats')
+  getAdminStats() {
+    return this.appService.adminGetStats();
+  }
 }
 
