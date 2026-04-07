@@ -3,6 +3,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { BullModule } from '@nestjs/bullmq';
+import { PayrollProcessor } from './payroll.processor';
 
 @Module({
   imports: [
@@ -30,6 +31,6 @@ import { BullModule } from '@nestjs/bullmq';
   ],
 
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, PayrollProcessor],
 })
 export class AppModule { }

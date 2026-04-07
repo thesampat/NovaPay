@@ -50,5 +50,25 @@ export class AppController {
   getAdminStats() {
     return this.appService.adminGetStats();
   }
+
+  @Post('admin/reset-ledger')
+  resetLedger() {
+    return this.appService.adminResetLedger();
+  }
+
+  @Post('admin/reset-users')
+  resetUsers() {
+    return this.appService.adminResetUsers();
+  }
+
+  @Post('admin/seed-users')
+  seedUsers() {
+    return this.appService.adminSeedUsers();
+  }
+
+  @Post('admin/run-refunds')
+  runRefunds() {
+    return this.appService.adminRunRefunds();
+  }
 }
 

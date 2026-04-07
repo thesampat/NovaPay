@@ -12,44 +12,33 @@ export class AppController {
   }
 
   @MessagePattern('create_user')
-  createUser(data: any) {
+  async createUser(data: any) {
     return this.appService.createUser(data);
   }
 
-  @MessagePattern('get_user')
-  getUserById(data: { userId: number }) {
-    try {
-      return this.appService.getUserWithDecryption(data?.userId)
-    } catch (error) {
+  @MessagePattern('get_balance')
+  async getBalance(data: { userId: number }) {
+    const user = await this.appService.getUserById(data.userId);
+    return { balance: user ? user.balance : 0 };
+  }
 
-      return error
-    }
+  @MessagePattern('get_user')
+  async getUserById(data: { userId: number }) {
+    return this.appService.getUserWithDecryption(data?.userId);
   }
 
   @MessagePattern('update_balance')
-  updateBalance(data: { userId: number, amount: number, type: 'debit' | 'credit', transaction_id: string }) {
-    try {
-      return this.appService.updateBalance(data)
-    } catch (error) {
-      return error
-    }
+  async updateBalance(data: { userId: number, amount: number, type: 'debit' | 'credit', transaction_id: string }) {
+    return this.appService.updateBalance(data);
+  }
+
+  @MessagePattern('check_transaction')
+  async checkTransaction(data: { userId: number, transactionId: string }) {
+    return this.appService.checkTransaction(data.userId, data.transactionId);
   }
 
   @MessagePattern('get_currency')
-  getCurrency(data: { sender: number, receiver: number }) {
-    try {
-      return this.appService.getCurrency(data.sender, data.receiver)
-    } catch (error) {
-      return error
-    }
+  async getCurrency(data: { sender: number, receiver: number }) {
+    return this.appService.getCurrency(data.sender, data.receiver);
   }
-
-  // @MessagePattern('get_all_users')
-  // getAllUser() {
-  //   try {
-  //     return this.appService.getAllUsers()
-  //   } catch (error) {
-  //     return error
-  //   }
-  // }
 }

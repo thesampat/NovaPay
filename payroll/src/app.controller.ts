@@ -1,4 +1,5 @@
-import { BadRequestException, Body, Controller, Get, Post } from '@nestjs/common';
+import { BadRequestException, Controller, Get } from '@nestjs/common';
+import { MessagePattern, Payload } from '@nestjs/microservices';
 import { AppService } from './app.service';
 import type { IPayrollBulk } from './payroll.types';
 
@@ -11,9 +12,14 @@ export class AppController {
     return 'Helo - From - Payroll'
   }
 
-  @Post('payroll/process')
-  async processPayroll(@Body() body: IPayrollBulk) {
+  @MessagePattern('run_payroll')
+  async processPayroll(body: IPayrollBulk) {
     if (!body.sender || !body.paylist) throw new BadRequestException();
     return this.appService.processPayroll(body);
+  }
+
+  @MessagePattern('get_status')
+  async getStatus(data: { batchId: string }) {
+    return this.appService.getStatus(data);
   }
 }

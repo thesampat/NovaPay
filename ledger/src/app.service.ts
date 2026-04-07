@@ -1,11 +1,15 @@
 import { Injectable } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
 import { MessagePattern } from '@nestjs/microservices';
 import * as ledgerTypes from './ledger.types';
-import { LedgerModel } from './ledger.schema';
 import { createHash } from 'crypto';
 
 @Injectable()
 export class AppService {
+  constructor(
+    @InjectModel('Ledger') private readonly ledgerModel: Model<ledgerTypes.ILedgerEntry>
+  ) { }
   getHello(): string {
     return 'Hello World!';
   }
@@ -16,10 +20,12 @@ export class AppService {
     return hash.digest('hex');
   }
 
-  @MessagePattern('write_ledger')
   async writeLedger(data: Omit<ledgerTypes.ILedgerEntry, 'timestamp' | 'current_hash' | 'previous_hash'>) {
+    if (data.amount === 999) {
+      throw new Error('SIMULATED LEDGER FAILURE');
+    }
     try {
-      const lastEntry = await LedgerModel.findOne().sort({ timestamp: -1 });
+      const lastEntry = await this.ledgerModel.findOne().sort({ timestamp: -1 });
       const previousHash = lastEntry ? lastEntry.current_hash : '0'.repeat(64);
 
       const entryData = {
@@ -29,26 +35,25 @@ export class AppService {
 
       const currentHash = this.calculateHash(entryData);
 
-      await LedgerModel.create({
+      await this.ledgerModel.create({
         ...entryData,
         current_hash: currentHash,
       });
 
       return { status: 'success', hash: currentHash };
     } catch (error) {
-      console.error('Ledger Hashing Error:', error);
-      return { status: 'error', message: error.message };
+      console.error('Ledger error:', error);
+      throw error;
     }
   }
 
-  @MessagePattern('update_ledger_status')
   async updateLedgerStatus(data: { transaction_id: string, status: ledgerTypes.ILedgerEntry['status'] }) {
     try {
-      await LedgerModel.updateMany({ transaction_id: data.transaction_id }, { $set: { status: data.status } });
+      await this.ledgerModel.updateMany({ transaction_id: data.transaction_id }, { $set: { status: data.status } });
       return { status: 'success' };
     } catch (error) {
-      console.error('Ledger Update Error:', error);
-      return { status: 'error', message: error.message };
+      console.error('Ledger error:', error);
+      throw error;
     }
   }
 }

@@ -1,8 +1,8 @@
 import mongoose from "mongoose";
 import { ILedgerEntry } from "./ledger.types";
 
-const LedgerSchema = new mongoose.Schema<ILedgerEntry>({
-  account_id: { type: Number, required: true, index: true },
+export const LedgerSchema = new mongoose.Schema<ILedgerEntry>({
+  account_id: { type: String, required: true, index: true },
   transaction_id: { type: String, required: true, index: true },
   type: { type: String, enum: ['DEBIT', 'CREDIT'], required: true },
   amount: { type: Number, required: true },

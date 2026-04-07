@@ -39,9 +39,7 @@ describe('AppService (Transaction)', () => {
       transactionId: 'tx-abc-001',
     };
 
-    // Helper to set the happy-path mocks up for each downstream service
     const setupHappyPath = () => {
-      // get_currency: returns sender (USD) and receiver (GBP)
       mockUserWalletService.send.mockImplementation((pattern: string) => {
         if (pattern === 'get_currency') {
           return of([
@@ -49,18 +47,16 @@ describe('AppService (Transaction)', () => {
             { account_id: 202, currency: 'GBP' },
           ]);
         }
-        // update_balance (debit & credit)
         return of({ status: 'success' });
       });
 
-      // get_rate: USD -> GBP = 0.79
       mockFxService.send.mockImplementation((pattern: string) => {
         if (pattern === 'get_rate') return of({ rate: 0.79 });
-        // clear_rate
+
         return of({ status: 'cleared' });
       });
 
-      // write_ledger & update_ledger_status
+
       mockLedgerService.send.mockReturnValue(of({ status: 'success', hash: 'abc123' }));
     };
 

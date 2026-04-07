@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
+import { ClientsModule, Transport } from '@nestjs/microservices';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UserSchema } from './schemas/user.schema';
@@ -17,8 +18,15 @@ const isDocker = !!process.env.SERVICE_NAME;
     }),
     MongooseModule.forFeature([{ name: 'Users', schema: UserSchema }], 'usersConnection'),
     MongooseModule.forFeature([{ name: 'Ledger', schema: LedgerSchema }], 'ledgerConnection'),
+    ClientsModule.register([
+      {
+        name: 'USER_WALLET_SERVICE',
+        transport: Transport.TCP,
+        options: { host: isDocker ? 'user-wallet' : '127.0.0.1', port: 3001 },
+      },
+    ]),
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }

@@ -16,6 +16,26 @@ export class AppController {
     return this.appService.getAllLedgers();
   }
 
+  @MessagePattern('admin_reset_ledger')
+  resetLedger() {
+    return this.appService.resetLedger();
+  }
+
+  @MessagePattern('admin_reset_users')
+  resetUsers() {
+    return this.appService.resetUsers();
+  }
+
+  @MessagePattern('admin_seed_users')
+  seedUsers() {
+    return this.appService.seedUsers();
+  }
+
+  @MessagePattern('admin_run_refunds')
+  runRefunds() {
+    return this.appService.runRefunds();
+  }
+
   @MessagePattern('admin_get_stats')
   getStats() {
     return this.appService.getPlatformStats();

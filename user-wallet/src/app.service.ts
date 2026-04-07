@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
 import { IUSER } from './user.types';
-import { UserModel } from './user.schema';
-import { tryCatch } from 'bullmq';
 import { MessagePattern } from '@nestjs/microservices';
 
 import { EncryptionService } from './encryption.service';
@@ -9,17 +9,18 @@ import { EncryptionService } from './encryption.service';
 @Injectable()
 export class AppService {
   constructor(
+    @InjectModel('Users') private readonly userModel: Model<IUSER>,
     private readonly encryptionService: EncryptionService
-  ) {}
+  ) { }
 
   async createUser(data: { account_id: number, balance: number, currency: string, name: string, age: string, gender: string }) {
-    const newUser = new UserModel({
+    const newUser = new this.userModel({
       account_id: data.account_id,
       balance: data.balance,
       currency: data.currency,
-      name: this.encryptionService.encrypt(data.name),
-      age: this.encryptionService.encrypt(data.age),
-      gender: this.encryptionService.encrypt(data.gender),
+      name: data.name ? this.encryptionService.encrypt(data.name) : undefined,
+      age: data.age ? this.encryptionService.encrypt(data.age) : undefined,
+      gender: data.gender ? this.encryptionService.encrypt(data.gender) : undefined,
     });
 
     await newUser.save();
@@ -27,7 +28,7 @@ export class AppService {
   }
 
   async getUserWithDecryption(id: number) {
-    const user = await UserModel.findOne({ account_id: id });
+    const user = await this.userModel.findOne({ account_id: id });
     if (!user) return null;
 
     return {
@@ -47,7 +48,7 @@ export class AppService {
 
   getUserById(id: number): Promise<IUSER | null> {
     try {
-      return UserModel.findOne({ account_id: id });
+      return this.userModel.findOne({ account_id: id });
     } catch (error) {
       console.log(error);
       throw error;
@@ -55,12 +56,15 @@ export class AppService {
   }
 
   async updateBalance(data: { userId: number, amount: number, type: 'debit' | 'credit', transaction_id: string }) {
-    const user = await UserModel.findOne({ account_id: data.userId });
+    if (data.type === 'credit' && data.transaction_id?.includes('fail')) {
+      throw new Error('SIMULATED CREDIT FAILURE');
+    }
+    const user = await this.userModel.findOne({ account_id: data.userId });
     if (!user) throw new Error('User not found');
 
 
     if (data.type === 'debit') {
-      const res = await UserModel.updateOne(
+      const res = await this.userModel.updateOne(
         {
           account_id: data.userId,
           balance: { $gte: data.amount },
@@ -77,7 +81,7 @@ export class AppService {
       }
       return { status: 'success' };
     } else {
-      const res = await UserModel.updateOne(
+      const res = await this.userModel.updateOne(
         {
           account_id: data.userId,
           processed_transactions: { $ne: data.transaction_id }
@@ -96,8 +100,15 @@ export class AppService {
   }
 
 
-  getCurrency(sender, receiver) {
-    return UserModel.find({ account_id: { $in: [sender, receiver] } }, { currency: 1, account_id: 1, _id: 0 })
+  async checkTransaction(userId: number, transactionId: string) {
+    const user = await this.userModel.findOne({ account_id: userId, processed_transactions: transactionId });
+    return { processed: !!user };
+  }
+
+  async getCurrency(sender, receiver) {
+    let user = await this.userModel.find({ account_id: { $in: [sender, receiver] } }, { currency: 1, account_id: 1, _id: 0 })
+    console.log('him on user', user, sender, receiver)
+    return user
   }
 
 

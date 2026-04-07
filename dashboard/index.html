@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NovaPay Admin Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="dark-mode">
+    <div class="container">
+        <header>
+            <div class="logo">
+                <h1>NovaPay<span>Admin</span></h1>
+            </div>
+            <div class="stats-row" id="stats-container">
+                <div class="stat-card">
+                    <span class="label">Total Users</span>
+                    <span class="value" id="stat-users">0</span>
+                </div>
+                <div class="stat-card">
+                    <span class="label">Ledger Entries</span>
+                    <span class="value" id="stat-ledgers">0</span>
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <section class="actions">
+                <button id="btn-seed" class="btn primary">Reset & Seed Users</button>
+                <button id="btn-refund" class="btn secondary">Run Refund Job</button>
+                <button id="btn-reset-ledger" class="btn danger">Reset Ledger</button>
+                <button id="btn-refresh" class="btn secondary">Refresh Data</button>
+            </section>
+
+            <section class="tabs">
+                <div class="tab-header">
+                    <button class="tab-btn active" data-tab="users">Users</button>
+                    <button class="tab-btn" data-tab="ledger">Ledger</button>
+                </div>
+                <div class="tab-content">
+                    <div id="tab-users" class="content-pane active">
+                        <table id="users-table">
+                            <thead>
+                                <tr>
+                                    <th>Account ID</th>
+                                    <th>Balance</th>
+                                    <th>Currency</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <div id="tab-ledger" class="content-pane">
+                        <table id="ledger-table">
+                            <thead>
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th>Account</th>
+                                    <th>Type</th>
+                                    <th>Amount</th>
+                                    <th>Hash</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+    <div id="toast" class="toast"></div>
+    <script src="app.js"></script>
+</body>
+</html>

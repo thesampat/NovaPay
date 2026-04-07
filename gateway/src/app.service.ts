@@ -63,5 +63,21 @@ export class AppService {
   adminGetStats() {
     return this.adminClient.send('admin_get_stats', {});
   }
+
+  adminResetLedger() {
+    return this.adminClient.send('admin_reset_ledger', {});
+  }
+
+  adminResetUsers() {
+    return this.adminClient.send('admin_reset_users', {});
+  }
+
+  adminSeedUsers() {
+    return this.adminClient.send('admin_seed_users', {});
+  }
+
+  adminRunRefunds() {
+    return this.adminClient.send('admin_run_refunds', {});
+  }
 }
 

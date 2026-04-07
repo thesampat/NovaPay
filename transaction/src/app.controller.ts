@@ -1,4 +1,5 @@
 import { Controller, Get, Query } from '@nestjs/common';
+import { MessagePattern } from '@nestjs/microservices';
 import { AppService } from './app.service';
 import * as types from './types';
 
@@ -11,8 +12,8 @@ export class AppController {
     return this.appService.getHello();
   }
 
-  @Get()
-  transferAmount(@Query() query: types.IPayLoad) {
+  @MessagePattern('transfer_amount')
+  transferAmount(query: types.IPayLoad) {
     try {
       return this.appService.transferAmount(query)
     } catch (error) {

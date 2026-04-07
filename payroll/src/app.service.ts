@@ -25,7 +25,6 @@ export class AppService {
     return 'Hello World!';
   }
 
-  @MessagePattern('run_payroll')
   async processPayroll(data: payRollTypes.IPayrollBulk) {
     let sender_balance = await this.userWalletClient.send('get_balance', { userId: data.sender }).toPromise();
     if (sender_balance.balance < data.paylist.reduce((acc, curr) => acc + curr.amount, 0)) {
@@ -53,7 +52,6 @@ export class AppService {
     return { status: 'queued', batchId: data.transactionId };
   }
 
-  @MessagePattern('get_status')
   async getStatus(data: { batchId: string }) {
     const parentJob = await this.myQueue.getJob(data.batchId);
     if (!parentJob) return { status: 'not_found' };

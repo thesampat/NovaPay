@@ -152,6 +152,15 @@ services:
       - "13133:13133"
       - "4318:4318"
 
+  dashboard:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./dashboard:/usr/share/nginx/html
+    depends_on:
+      - gateway
+
 volumes:
   mongodb_data:
   redis_data:

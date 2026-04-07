@@ -17,7 +17,6 @@ export class AppService {
     return 'Hello World! From Transaction';
   }
 
-  @MessagePattern('transfer_amount')
   async transferAmount(data: IPayLoad) {
 
     const users = await this.userWallerService.send('get_currency', { sender: data.sender, receiver: data.receiver }).toPromise();
@@ -29,7 +28,7 @@ export class AppService {
     const baseCurrency = senderUser.currency;
     const targetCurrency = receiverUser.currency;
     const fxCheck = await this.fxService.send('get_rate', { base: baseCurrency, target: targetCurrency }).toPromise();
-    
+
     if (!fxCheck || !fxCheck.rate) throw new Error(`Rate fetch failed`);
 
     const { rate } = fxCheck;
@@ -64,10 +63,10 @@ export class AppService {
 
     } catch (error) {
       console.error("TRANSACTION FAILED:", error);
-      
+
       // Update ledger entries to FAILED so we know what went wrong
       await this.ledgerService.send('update_ledger_status', { transaction_id: transactionId, status: 'FAILED' }).toPromise();
-      
+
       throw new Error(`Transaction failed: ${error.message}`);
     }
   }
