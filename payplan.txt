@@ -1,0 +1,10 @@
+ --- ledger focused
+
+pay(sender, receiver, request_id):
+    if request_id in redis:
+        return redis[request_id]
+
+    6 entries in ledger via kafka broker status = pending
+    
+    
+    

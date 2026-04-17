@@ -1,18 +1,27 @@
-import './tracing';
+import './tracing'; 
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 
 async function bootstrap() {
-  const app = await NestFactory.createMicroservice<MicroserviceOptions>(AppModule, {
-    transport: Transport.TCP,
+  const app = await NestFactory.create(AppModule);
+
+  app.connectMicroservice({
+    transport: Transport.KAFKA,
     options: {
-      host: '0.0.0.0',
-      port: 3003,
+      client: {
+        brokers: [process.env.SERVICE_NAME ? 'kafka:29092' : 'localhost:9092'],
+      },
+      consumer: {
+        groupId: 'ledger-consumer',
+      },
     },
   });
-  await app.listen().then(() => {
-    console.log('Ledger service is running on port 3003');
+
+  await app.startAllMicroservices();
+  const port = 3003;
+  await app.listen(port).then(() => {
+    console.log(`Ledger Service is running as a Hybrid App (HTTP on ${port} + Kafka)`);
   });
 }
 bootstrap();

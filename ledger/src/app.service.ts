@@ -20,29 +20,44 @@ export class AppService {
     return hash.digest('hex');
   }
 
-  async writeLedger(data: Omit<ledgerTypes.ILedgerEntry, 'timestamp' | 'current_hash' | 'previous_hash'>) {
-    if (data.amount === 999) {
-      throw new Error('SIMULATED LEDGER FAILURE');
+  async writeLedger(entries: Omit<ledgerTypes.ILedgerEntry, 'timestamp' | 'current_hash' | 'previous_hash'>[]) {
+    if (!entries || entries.length === 0) return { status: 'success' };
+
+    const transactionId = entries[0].transaction_id;
+
+    // 0. BATCH IDEMPOTENCY CHECK: Ensure the whole batch isn't recorded twice
+    const existing = await this.ledgerModel.findOne({ transaction_id: transactionId });
+    if (existing) {
+      return { status: 'success', message: 'Batch already exists' };
     }
+
     try {
-      const lastEntry = await this.ledgerModel.findOne().sort({ timestamp: -1 });
-      const previousHash = lastEntry ? lastEntry.current_hash : '0'.repeat(64);
+      let lastEntry = await this.ledgerModel.findOne().sort({ timestamp: -1 });
+      let previousHash = lastEntry ? lastEntry.current_hash : '0'.repeat(64);
 
-      const entryData = {
-        ...data,
-        previous_hash: previousHash,
-      };
+      const entriesToSave: ledgerTypes.ILedgerEntry[] = [];
 
-      const currentHash = this.calculateHash(entryData);
+      for (const entry of entries) {
+        const entryData = {
+          ...entry,
+          previous_hash: previousHash,
+          timestamp: new Date()
+        };
 
-      await this.ledgerModel.create({
-        ...entryData,
-        current_hash: currentHash,
-      });
+        const currentHash = this.calculateHash(entryData);
+        previousHash = currentHash; // Advance chain for next leg in batch
 
-      return { status: 'success', hash: currentHash };
+        entriesToSave.push({
+          ...entryData,
+          current_hash: currentHash
+        });
+      }
+
+      await this.ledgerModel.insertMany(entriesToSave);
+      return { status: 'success', count: entriesToSave.length };
+
     } catch (error) {
-      console.error('Ledger error:', error);
+      console.error('Ledger Batch Error:', error);
       throw error;
     }
   }

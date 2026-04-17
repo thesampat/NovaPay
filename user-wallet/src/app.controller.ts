@@ -18,8 +18,8 @@ export class AppController {
 
   @MessagePattern('get_balance')
   async getBalance(data: { userId: number }) {
-    const user = await this.appService.getUserById(data.userId);
-    return { balance: user ? user.balance : 0 };
+    const balance = await this.appService.getBalance(data.userId);
+    return { balance };
   }
 
   @MessagePattern('get_user')

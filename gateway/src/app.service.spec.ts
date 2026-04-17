@@ -26,9 +26,9 @@ describe('AppService (Gateway)', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AppService,
-        { provide: 'USER_WALLET_SERVICE', useValue: mockUserWalletClient },
-        { provide: 'TRANSACTION_SERVICE', useValue: mockTransactionClient },
-        { provide: 'PAYROLL_SERVICE', useValue: mockPayrollClient },
+        // { provide: 'USER_WALLET_SERVICE', useValue: mockUserWalletClient },
+        // { provide: 'TRANSACTION_SERVICE', useValue: mockTransactionClient },
+        // { provide: 'PAYROLL_SERVICE', useValue: mockPayrollClient },
       ],
     }).compile();
 

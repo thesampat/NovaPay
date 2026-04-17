@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Req } from '@nestjs/common';
 import { AppService } from './app.service';
 import { CheckBalanceDtoTs, PayDtoTs } from 'dto/check-balance.dto.ts/check-balance.dto.ts';
 
@@ -27,7 +27,9 @@ export class AppController {
   }
 
   @Post('payroll/process')
-  payroll(@Body() data: any) {
+  payroll(@Req() req: Request, @Body() data: any) {
+    let idempotencyKey = req.headers['idempotency-key'];
+    data.idempotencyKey = idempotencyKey;
     return this.appService.processPayroll(data);
   }
 

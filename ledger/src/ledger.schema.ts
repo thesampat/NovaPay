@@ -18,6 +18,7 @@ export const LedgerSchema = new mongoose.Schema<ILedgerEntry>({
 
 
 
+LedgerSchema.index({ timestamp: -1 });
 LedgerSchema.index({ account_id: 1, timestamp: -1 });
 
 export const LedgerModel = mongoose.model<ILedgerEntry>("Ledger", LedgerSchema);

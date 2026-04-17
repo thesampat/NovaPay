@@ -9,7 +9,7 @@ export class AppService {
   constructor(
     @InjectModel('Users', 'usersConnection') private userModel: Model<any>,
     @InjectModel('Ledger', 'ledgerConnection') private ledgerModel: Model<any>,
-    @Inject('USER_WALLET_SERVICE') private userWalletClient: ClientProxy,
+    @Inject('KAFKA_SERVICE') private kafkaClient: ClientProxy,
   ) { }
 
   async runRefunds() {
@@ -21,16 +21,16 @@ export class AppService {
     for (const txId of uniqueTxIds) {
       // Find the DEBIT entry for the actual sender (not settlement pool)
       const debitEntry = failedLedgers.find(l => l.transaction_id === txId && l.type === 'DEBIT' && !l.account_id.includes('SETTLEMENT') && l.account_id !== 'PLATFORM_FEE_ACCOUNT');
-      
+
       if (debitEntry) {
         // Check if the user was actually debited in the wallet service
-        const walletCheck = await firstValueFrom(this.userWalletClient.send('check_transaction', { userId: Number(debitEntry.account_id), transactionId: txId }));
-        
+        const walletCheck: any = await firstValueFrom(this.kafkaClient.send('check_transaction', { userId: Number(debitEntry.account_id), transactionId: txId }));
+
         if (walletCheck.processed) {
           console.log(`Refunding transaction ${txId} for user ${debitEntry.account_id}`);
-          
+
           // Issue refund
-          await firstValueFrom(this.userWalletClient.send('update_balance', {
+          await firstValueFrom(this.kafkaClient.send('update_balance', {
             userId: Number(debitEntry.account_id),
             amount: debitEntry.amount, // Refund only the main amount (or include fee if needed)
             type: 'credit',
@@ -69,11 +69,11 @@ export class AppService {
   async seedUsers() {
     await this.userModel.deleteMany({});
     const users: any[] = [];
-    for (let i = 1; i <= 1000; i++) {
+    for (let i = 1; i <= 20000; i++) {
       users.push({
         account_id: i,
-        balance: i === 1 ? 1000000 : 1000,
-        currency: i % 2 === 0 ? 'CNY' : 'USD',
+        balance: i === 1 ? 10000000 : 1000,
+        currency: i % 2 === 0 ? 'INR' : 'INR',
         processed_transactions: [],
       });
       if (users.length >= 100) {
@@ -82,7 +82,7 @@ export class AppService {
       }
     }
     if (users.length > 0) await this.userModel.insertMany(users);
-    return { status: 'success', message: '1000 users seeded' };
+    return { status: 'success', message: '20,000 users seeded' };
   }
 
   async getPlatformStats() {

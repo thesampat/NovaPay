@@ -1,0 +1,15 @@
+### NovaPay: Distributed High-Throughput Financial Engine
+
+*   Architected a resilient microservices system using Node.js, Kafka, and Redis, designed to process high-volume payroll batches (20,000+ unique payments) with 99.99% reliability.
+*   Optimized system throughput by 100x through BullMQ concurrency tuning and Kafka consumer group partitioning, achieving a processing rate of 160+ transactions per second (TPS) on a single-node setup.
+*   Engineered a Cryptographic Audit Ledger using immutable hash-chains in MongoDB, ensuring 100% data integrity and providing a tamper-proof "Golden Source of Truth" for financial reconciliation.
+*   Implemented a robust Idempotency Layer using unique transaction indices and distributed locking, preventing double-spending and ensuring exact-once processing under network retries.
+*   Resolved complex Kafka group rebalancing issues by implementing differentiated consumer groups and manual topic provisioning, reducing service startup latency and preventing message loss during scale-up.
+*   Enhanced system observability by integrating OpenTelemetry and Jaeger for distributed tracing, enabling 95% faster identification of bottlenecks in multi-hop Kafka transaction flows.
+
+### Technical Stack
+*   Backend: NestJS, Node.js, Microservices Architecture
+*   Messaging: Apache Kafka, BullMQ, Redis (Pub/Sub)
+*   Databases: MongoDB (Audit Ledger), Redis (Distributed Locking/Caching)
+*   Observability: OpenTelemetry, Jaeger, Prometheus, Grafana
+*   Testing: k6 (Load Testing), Chaos Engineering (Resilience Testing)

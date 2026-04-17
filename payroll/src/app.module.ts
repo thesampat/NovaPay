@@ -3,34 +3,56 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { BullModule } from '@nestjs/bullmq';
+import { PrometheusModule, makeCounterProvider } from '@willsoto/nestjs-prometheus';
 import { PayrollProcessor } from './payroll.processor';
 
 @Module({
   imports: [
-    ClientsModule.register([
-      {
-        name: 'USER_WALLET_SERVICE',
-        transport: Transport.TCP,
-        options: { host: process.env.SERVICE_NAME ? 'user-wallet' : '127.0.0.1', port: 3001 },
-      },
-      {
-        name: 'TRANSACTION_SERVICE',
-        transport: Transport.TCP,
-        options: { host: process.env.SERVICE_NAME ? 'transaction' : '127.0.0.1', port: 3002 },
-      }
-    ]),
+    PrometheusModule.register(),
+    // 🏦 Redis Connection for the Manager
     BullModule.forRoot({
-      connection: { host: process.env.SERVICE_NAME ? 'redis' : '127.0.0.1', port: 6379 },
+      connection: {
+        host: 'redis',
+        port: 6379,
+      },
     }),
+    // 📋 The Payroll Queues
     BullModule.registerQueue({
-      name: 'payroll',
+      name: 'payroll-engine',
     }),
     BullModule.registerFlowProducer({
       name: 'payroll-flow',
     }),
+    // 🚀 Kafka Connection for the Courier
+    ClientsModule.register([
+      {
+        name: 'KAFKA_SERVICE',
+        transport: Transport.KAFKA,
+        options: {
+          client: {
+            clientId: 'payroll',
+            brokers: ['kafka:29092'],
+          },
+          consumer: {
+            groupId: 'payroll-consumer-group',
+          },
+        },
+      },
+    ]),
   ],
-
   controllers: [AppController],
-  providers: [AppService, PayrollProcessor],
+  providers: [
+    AppService, 
+    PayrollProcessor,
+    makeCounterProvider({
+      name: 'payroll_batches_total',
+      help: 'Total number of payroll batches initiated',
+    }),
+    makeCounterProvider({
+      name: 'payroll_payments_total',
+      help: 'Total number of individual employee payments processed',
+      labelNames: ['status'],
+    }),
+  ],
 })
-export class AppModule { }
+export class AppModule {}

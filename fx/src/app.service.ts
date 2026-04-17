@@ -59,6 +59,7 @@ export class AppService {
     const baseRate = fluctuate(rawBaseRate);
     const targetRate = fluctuate(rawTargetRate);
 
-    return Number(((1 / baseRate) * targetRate).toFixed(4));
+    // return Number(((1 / baseRate) * targetRate).toFixed(4));
+    return 1
   }
 }

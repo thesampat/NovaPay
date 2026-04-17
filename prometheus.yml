@@ -1,0 +1,18 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'microservices'
+    static_configs:
+      - targets:
+          - 'gateway:3000'
+          - 'user-wallet:3001'
+          - 'transaction:3002'
+          - 'ledger:3003'
+          - 'fx:3004'
+          - 'payroll:3005'
+          - 'admin:3006'

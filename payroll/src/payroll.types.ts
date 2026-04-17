@@ -4,12 +4,12 @@ export interface IPayrollBulk {
         receiver: number,
         amount: number
     }[],
-    transactionId: string
+    idempotencyKey: string
 }
 
 export interface ISinglePayroll {
     sender: number,
     receiver: number,
     amount: number,
-    transactionId: string
+    idempotencyKey: string
 }

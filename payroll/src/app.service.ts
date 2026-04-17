@@ -1,74 +1,92 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
 import * as payRollTypes from './payroll.types'
-import { Queue, FlowProducer } from 'bullmq';
-import { ClientProxy, MessagePattern } from '@nestjs/microservices';
-import { InjectQueue, InjectFlowProducer } from '@nestjs/bullmq';
-
-
-
-
+import { ClientProxy } from '@nestjs/microservices';
+import { InjectFlowProducer, InjectQueue } from '@nestjs/bullmq';
+import { FlowProducer, Queue } from 'bullmq';
+import { InjectMetric } from '@willsoto/nestjs-prometheus';
+import { Counter } from 'prom-client';
+import { firstValueFrom } from 'rxjs';
 
 @Injectable()
-export class AppService {
+export class AppService implements OnModuleInit {
   constructor(
-    @InjectQueue('payroll') private myQueue: Queue,
+    @Inject('KAFKA_SERVICE') private kafkaService: ClientProxy,
+    @InjectQueue('payroll-engine') private payrollQueue: Queue,
     @InjectFlowProducer('payroll-flow') private flowProducer: FlowProducer,
-    @Inject('USER_WALLET_SERVICE') private userWalletClient: ClientProxy
+    @InjectMetric('payroll_batches_total') private readonly batchCounter: Counter<string>,
   ) { }
 
-
-  async addJob(data: payRollTypes.ISinglePayroll) {
-    await this.myQueue.add('payroll', data);
-  }
-
-  getHello(): string {
-    return 'Hello World!';
+  async onModuleInit() {
+    (this.kafkaService as any).subscribeToResponseOf('get_balance');
+    (this.kafkaService as any).subscribeToResponseOf('transfer_amount');
+    await this.kafkaService.connect();
   }
 
   async processPayroll(data: payRollTypes.IPayrollBulk) {
-    let sender_balance = await this.userWalletClient.send('get_balance', { userId: data.sender }).toPromise();
-    if (sender_balance.balance < data.paylist.reduce((acc, curr) => acc + curr.amount, 0)) {
-      throw new Error('Insufficient balance');
+    const existingJob = await this.payrollQueue.getJob(`batch_${data.idempotencyKey}`);
+    if (existingJob) {
+      return {
+        status: 'queued',
+        batchId: data.idempotencyKey,
+        count: data.paylist.length,
+        alreadyProcessed: true
+      };
     }
 
+    const balanceInfo: any = await firstValueFrom(
+      this.kafkaService.send('get_balance', { userId: data.sender })
+    );
+
+    const totalRequired = data.paylist.reduce((acc, curr) => acc + curr.amount, 0);
+
+    if (balanceInfo.balance < totalRequired) {
+      throw new Error(`Insufficient Funds. Required: ${totalRequired}, Found: ${balanceInfo.balance}`);
+    }
+
+    this.batchCounter.inc();
+
     await this.flowProducer.add({
-      name: 'payroll-batch-complete',
-      queueName: 'payroll',
-      data: { batchId: data.transactionId, sender: data.sender },
-      opts: { jobId: data.transactionId },
-      children: data.paylist.map(pay => ({
-        name: 'payroll',
-        queueName: 'payroll',
+      name: 'batch-complete',
+      queueName: 'payroll-engine',
+      data: { batchId: data.idempotencyKey, sender: data.sender },
+      opts: { jobId: `batch_${data.idempotencyKey}` },
+      children: (data.paylist || []).map(emp => ({
+        name: 'individual-payment',
+        queueName: 'payroll-engine',
         data: {
           sender: data.sender,
-          receiver: pay.receiver,
-          amount: pay.amount,
-          transactionId: `${data.transactionId}_${pay.receiver}`
+          receiver: emp.receiver,
+          amount: emp.amount,
+          transactionId: `${data.idempotencyKey}_${emp.receiver}`
         },
-        opts: { jobId: `${data.transactionId}_${pay.receiver}` }
+        opts: {
+          jobId: `pay_${data.idempotencyKey}_${emp.receiver}`,
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 2000 }
+        }
       }))
     });
 
-    return { status: 'queued', batchId: data.transactionId };
+    return {
+      status: 'queued',
+      batchId: data.idempotencyKey,
+      count: data.paylist.length
+    };
   }
 
   async getStatus(data: { batchId: string }) {
-    const parentJob = await this.myQueue.getJob(data.batchId);
-    if (!parentJob) return { status: 'not_found' };
+    const job = await this.payrollQueue.getJob(`batch_${data.batchId}`);
+    if (!job) return { status: 'not_found' };
 
-    const state = await parentJob.getState();
-    const childrenCount = await parentJob.getDependenciesCount();
-
-    const total = (childrenCount.processed ?? 0) + (childrenCount.unprocessed ?? 0);
-    const completed = childrenCount.processed ?? 0;
-    const progress = total > 0 ? (completed / total) * 100 : 0;
-
+    const state = await job.getState();
+    const deps = await job.getDependenciesCount();
 
     return {
+      batchId: data.batchId,
       status: state,
-      progress: `${progress.toFixed(2)}%`,
-      total,
-      completed
+      processed: deps.processed || 0,
+      pending: deps.unprocessed || 0,
+      completion: deps.unprocessed === 0 ? '100%' : 'processing'
     };
   }
 }

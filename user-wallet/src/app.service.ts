@@ -46,9 +46,14 @@ export class AppService {
     return 'Hello World! User Wallet';
   }
 
+  async getBalance(id: number): Promise<number> {
+    const user = await this.userModel.findOne({ account_id: id }, { balance: 1 }).lean();
+    return user ? user.balance : 0;
+  }
+
   getUserById(id: number): Promise<IUSER | null> {
     try {
-      return this.userModel.findOne({ account_id: id });
+      return this.userModel.findOne({ account_id: id }).lean();
     } catch (error) {
       console.log(error);
       throw error;
@@ -59,55 +64,50 @@ export class AppService {
     if (data.type === 'credit' && data.transaction_id?.includes('fail')) {
       throw new Error('SIMULATED CREDIT FAILURE');
     }
-    const user = await this.userModel.findOne({ account_id: data.userId });
-    if (!user) throw new Error('User not found');
 
+    const filter: any = {
+      account_id: data.userId,
+      processed_transactions: { $ne: data.transaction_id }
+    };
 
     if (data.type === 'debit') {
-      const res = await this.userModel.updateOne(
-        {
-          account_id: data.userId,
-          balance: { $gte: data.amount },
-          processed_transactions: { $ne: data.transaction_id }
-        },
-        {
-          $inc: { balance: -data.amount },
-          $push: { processed_transactions: data.transaction_id }
-        }
-      );
-
-      if (res.modifiedCount === 0) {
-        throw new Error('Insufficient balance or transaction already processed');
-      }
-      return { status: 'success' };
-    } else {
-      const res = await this.userModel.updateOne(
-        {
-          account_id: data.userId,
-          processed_transactions: { $ne: data.transaction_id }
-        },
-        {
-          $inc: { balance: data.amount },
-          $push: { processed_transactions: data.transaction_id }
-        }
-      );
-
-      if (res.modifiedCount === 0) {
-        return { status: 'success', message: 'Already credited' };
-      }
-      return { status: 'success' };
+      filter.balance = { $gte: data.amount };
     }
+
+    const update = {
+      $inc: { balance: data.type === 'credit' ? data.amount : -data.amount },
+      $push: { processed_transactions: data.transaction_id }
+    };
+
+    const res = await this.userModel.updateOne(filter, update);
+
+    if (res.modifiedCount === 0) {
+      // Check if it failed because it was already processed or insufficient funds
+      const alreadyProcessed = await this.userModel.findOne({
+        account_id: data.userId,
+        processed_transactions: data.transaction_id
+      });
+
+      if (alreadyProcessed) {
+        return { status: 'success', message: 'Already processed' };
+      }
+
+      throw new Error(data.type === 'debit' ? 'Insufficient balance or User not found' : 'User not found');
+    }
+
+    return { status: 'success' };
   }
 
-
   async checkTransaction(userId: number, transactionId: string) {
-    const user = await this.userModel.findOne({ account_id: userId, processed_transactions: transactionId });
+    const user = await this.userModel.findOne({
+      account_id: userId,
+      processed_transactions: transactionId
+    });
     return { processed: !!user };
   }
 
   async getCurrency(sender, receiver) {
     let user = await this.userModel.find({ account_id: { $in: [sender, receiver] } }, { currency: 1, account_id: 1, _id: 0 })
-    console.log('him on user', user, sender, receiver)
     return user
   }
 

@@ -13,7 +13,7 @@ export class AppController {
   }
 
   @MessagePattern('write_ledger')
-  async writeLedger(data: Omit<ledgerTypes.ILedgerEntry, 'timestamp' | 'current_hash' | 'previous_hash'>) {
+  async writeLedger(data: Omit<ledgerTypes.ILedgerEntry, 'timestamp' | 'current_hash' | 'previous_hash'>[]) {
     return this.appService.writeLedger(data);
   }
 

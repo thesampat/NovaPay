@@ -1,5 +1,5 @@
 import { Controller, Get, Query } from '@nestjs/common';
-import { MessagePattern } from '@nestjs/microservices';
+import { MessagePattern, EventPattern, Payload } from '@nestjs/microservices';
 import { AppService } from './app.service';
 import * as types from './types';
 
@@ -20,4 +20,9 @@ export class AppController {
       throw error
     }
   }
+  @EventPattern('transaction_completed')
+  handleTransactionCompleted(@Payload() data: any) {
+    console.log('KAFKA EVENT RECEIVED IN TRANSACTION SERVICE:', data);
+  }
 }
+

@@ -4,13 +4,115 @@ services:
   # Databases & Cache
   mongodb:
     image: mongo:latest
+    command: ["--replSet", "rs0", "--bind_ip_all"]
     volumes:
       - mongodb_data:/data/db
+    ports:
+      - "27018:27017"
+    networks:
+      - app-network
+    restart: always
 
   redis:
     image: redis:alpine
     volumes:
       - redis_data:/data
+    networks:
+      - app-network
+    restart: always
+
+  kafka:
+    image: apache/kafka:latest
+    ports:
+      - "9092:9092"
+    environment:
+      # KRaft settings (No Zookeeper needed)
+      - KAFKA_NODE_ID=1
+      - KAFKA_PROCESS_ROLES=broker,controller
+      - KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093,PLAINTEXT_HOST://0.0.0.0:9092
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka:29093
+      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0
+      - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
+      - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
+      - KAFKA_LOG_DIRS=/tmp/kraft-combined-logs
+      - KAFKA_AUTO_CREATE_TOPICS_ENABLE=true
+      - KAFKA_MESSAGE_MAX_BYTES=20000000
+      - KAFKA_REPLICA_FETCH_MAX_BYTES=20000000
+    networks:
+      - app-network
+    restart: always
+
+
+
+  # Monitoring & Observability
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - app-network
+    restart: always
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3007:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      - prometheus
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    networks:
+      - app-network
+    restart: always
+
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:latest
+    container_name: kafka-exporter
+    command: ["--kafka.server=kafka:29092"]
+    ports:
+      - "9308:9308"
+    depends_on:
+      - kafka
+    networks:
+      - app-network
+    restart: always
+
+  kafdrop:
+    image: obsidiandynamics/kafdrop:latest
+    container_name: kafdrop
+    ports:
+      - "9000:9000"
+    environment:
+      - KAFKA_BROKERCONNECT=kafka:29092
+      - JVM_OPTS=-Xms32M -Xmx64M
+      - SERVER_SERVLET_CONTEXTPATH=/
+    depends_on:
+      - kafka
+    networks:
+      - app-network
+    restart: always
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    ports:
+      - "16686:16686" # Jaeger UI
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+    networks:
+      - app-network
+    restart: always
+
 
 
   # Microservices
@@ -32,6 +134,8 @@ services:
       - payroll
       - fx
       - ledger
+    networks:
+      - app-network
 
   user-wallet:
     build:
@@ -46,6 +150,9 @@ services:
       - ./user-wallet/src:/usr/src/app/src
     depends_on:
       - mongodb
+      - kafka
+    networks:
+      - app-network
 
   transaction:
     build:
@@ -62,6 +169,9 @@ services:
       - user-wallet
       - ledger
       - fx
+      - kafka
+    networks:
+      - app-network
 
   ledger:
     build:
@@ -76,6 +186,8 @@ services:
       - ./ledger/src:/usr/src/app/src
     depends_on:
       - mongodb
+    networks:
+      - app-network
 
   fx:
     build:
@@ -90,6 +202,8 @@ services:
       - ./fx/src:/usr/src/app/src
     depends_on:
       - redis
+    networks:
+      - app-network
 
   payroll:
     build:
@@ -105,6 +219,8 @@ services:
     depends_on:
       - redis
       - transaction
+    networks:
+      - app-network
 
   admin:
     build:
@@ -119,38 +235,9 @@ services:
       - ./admin/src:/usr/src/app/src
     depends_on:
       - mongodb
-
-  # Observability
-  jaeger:
-    image: jaegertracing/all-in-one:latest
-    ports:
-      - "16686:16686"
-      - "4317:4317"
-
-  prometheus:
-    image: prom/prometheus:latest
-    volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-    ports:
-      - "9090:9090"
-
-  grafana:
-    image: grafana/grafana:latest
-    ports:
-      - "30010:3000" # Map to 30010 to avoid conflicting with Gateway
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-
-  otel-collector:
-    image: otel/opentelemetry-collector:latest
-    command: ["--config=/etc/otel-collector-config.yml"]
-    volumes:
-      - ./monitoring/otel-collector-config.yml:/etc/otel-collector-config.yml
-    ports:
-      - "8888:8888"
-      - "8889:8889"
-      - "13133:13133"
-      - "4318:4318"
+    networks:
+      - app-network
+    restart: always
 
   dashboard:
     image: nginx:alpine
@@ -160,7 +247,14 @@ services:
       - ./dashboard:/usr/share/nginx/html
     depends_on:
       - gateway
+    networks:
+      - app-network
+    restart: always
 
 volumes:
   mongodb_data:
   redis_data:
+
+networks:
+  app-network:
+    driver: bridge

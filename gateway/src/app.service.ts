@@ -1,83 +1,89 @@
-import { Inject, Injectable } from '@nestjs/common';
-import { ClientProxy } from '@nestjs/microservices';
+import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
+import { ClientKafka } from '@nestjs/microservices';
 import { createHash } from 'crypto';
 import { CheckBalanceDtoTs, PayDtoTs } from 'dto/check-balance.dto.ts/check-balance.dto.ts';
+import { PayrollBulkDto } from 'dto/payroll.dto.ts/payroll.dto.ts';
 
 @Injectable()
-export class AppService {
+export class AppService implements OnModuleInit {
   constructor(
-    @Inject('USER_WALLET_SERVICE') private userWalletClient: ClientProxy,
-    @Inject('TRANSACTION_SERVICE') private transactionClient: ClientProxy,
-    @Inject('PAYROLL_SERVICE') private payrollClient: ClientProxy,
-    @Inject('ADMIN_SERVICE') private adminClient: ClientProxy
+    @Inject('KAFKA_SERVICE') private kafkaClient: ClientKafka
   ) { }
+
+  async onModuleInit() {
+    const topics = [
+      'get_balance',
+      'create_user',
+      'transfer_amount',
+      'run_payroll',
+      'get_status',
+      'admin_get_users',
+      'admin_get_ledgers',
+      'admin_get_stats',
+      'admin_reset_ledger',
+      'admin_reset_users',
+      'admin_seed_users',
+      'admin_run_refunds',
+    ];
+
+    topics.forEach(topic => this.kafkaClient.subscribeToResponseOf(topic));
+    await this.kafkaClient.connect();
+  }
 
   getHello(): string {
     return 'Hello World!';
   }
 
   getBalance(data: CheckBalanceDtoTs) {
-    return this.userWalletClient.send('get_balance', data);
+    return this.kafkaClient.send('get_balance', data);
   }
 
   createUser(data: any) {
-    return this.userWalletClient.send('create_user', data);
+    return this.kafkaClient.send('create_user', data);
   }
 
   pay(data: PayDtoTs) {
-    // Generate deterministic idempotency key for simple repeated submissions
-    const fingerprint = `${data.sender}-${data.receiver}-${data.amount}-${new Date().getMinutes()}`;
-    const transactionId = createHash('sha256').update(fingerprint).digest('hex');
-
-    const payload = {
-      ...data,
-      transactionId: data.transactionId || transactionId
-    };
-
-    return this.transactionClient.send('transfer_amount', payload);
+    return this.kafkaClient.send('transfer_amount', data);
   }
 
-  processPayroll(data: any) {
-    const fingerprint = `${data.sender}-${data.paylist.length}-${new Date().getMinutes()}`;
-    const transactionId = createHash('sha256').update(fingerprint).digest('hex');
-
-    const payload = {
-      ...data,
-      transactionId: data.transactionId || transactionId
-    };
-    return this.payrollClient.send('run_payroll', payload);
+  processPayroll(data: PayrollBulkDto) {
+    return this.kafkaClient.send('run_payroll', data);
   }
 
   getPayrollStatus(id: string) {
-    return this.payrollClient.send('get_status', { batchId: id });
+    return this.kafkaClient.send('get_status', { batchId: id });
   }
 
+
+
+  // admin routes
+
   adminGetUsers() {
-    return this.adminClient.send('admin_get_users', {});
+    return this.kafkaClient.send('admin_get_users', {});
   }
 
   adminGetLedgers() {
-    return this.adminClient.send('admin_get_ledgers', {});
+    return this.kafkaClient.send('admin_get_ledgers', {});
   }
 
   adminGetStats() {
-    return this.adminClient.send('admin_get_stats', {});
+    return this.kafkaClient.send('admin_get_stats', {});
   }
 
   adminResetLedger() {
-    return this.adminClient.send('admin_reset_ledger', {});
+    return this.kafkaClient.send('admin_reset_ledger', {});
   }
 
   adminResetUsers() {
-    return this.adminClient.send('admin_reset_users', {});
+    return this.kafkaClient.send('admin_reset_users', {});
   }
 
   adminSeedUsers() {
-    return this.adminClient.send('admin_seed_users', {});
+    return this.kafkaClient.send('admin_seed_users', {});
   }
 
   adminRunRefunds() {
-    return this.adminClient.send('admin_run_refunds', {});
+    return this.kafkaClient.send('admin_run_refunds', {});
   }
 }
 
