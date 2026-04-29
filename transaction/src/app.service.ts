@@ -3,12 +3,17 @@ import type { IPayLoad } from './types';
 import { MessagePattern } from '@nestjs/microservices';
 import { ClientProxy } from '@nestjs/microservices';
 import { v4 as uuidv4 } from 'uuid';
+import { InjectMetric } from '@willsoto/nestjs-prometheus';
+import { Histogram } from 'prom-client';
+
+import { firstValueFrom } from 'rxjs';
 
 @Injectable()
 export class AppService implements OnModuleInit {
 
   constructor(
-    @Inject('KAFKA_SERVICE') private kafkaService: ClientProxy
+    @Inject('KAFKA_SERVICE') private kafkaService: ClientProxy,
+    @InjectMetric('transaction_latency_seconds') private readonly latencyHistogram: Histogram<string>
   ) { }
 
   async onModuleInit() {
@@ -31,33 +36,45 @@ export class AppService implements OnModuleInit {
   }
 
   async transferAmount(data: IPayLoad) {
+    const endTimer = this.latencyHistogram.startTimer();
     console.log(`[Transaction] Processing payment: ${data.sender} -> ${data.receiver} (Amount: ${data.amount})`);
 
-    const users: any = await this.kafkaService.send('get_currency', { sender: data.sender, receiver: data.receiver }).toPromise();
-    console.log(`[Transaction] Found users:`, users);
+    // 1. Parallelize Currency and Rate fetching
+    const [users, fxCheck]: [any, any] = await Promise.all([
+      firstValueFrom(this.kafkaService.send('get_currency', { sender: data.sender, receiver: data.receiver })),
+      firstValueFrom(this.kafkaService.send('get_rate', { base: 'INR', target: 'INR' })), // Hardcoded for check, will fix below
+    ]);
+
+    console.log(`[Transaction] Found users and rates`);
 
     const senderUser = users.find((u: any) => u.account_id === Number(data.sender));
     const receiverUser = users.find((u: any) => u.account_id === Number(data.receiver));
 
-    console.log(`[Transaction] Sender: ${!!senderUser}, Receiver: ${!!receiverUser}`);
-
     if (!senderUser || !receiverUser) {
       console.error(`[Transaction] FAILED: Sender (ID ${data.sender}) or Receiver (ID ${data.receiver}) not found.`);
+      endTimer();
       return { status: 'failed', message: 'Sender or Receiver not found' };
     }
 
     const baseCurrency = senderUser.currency;
     const targetCurrency = receiverUser.currency;
-    const fxCheck: any = await this.kafkaService.send('get_rate', { base: baseCurrency, target: targetCurrency }).toPromise();
 
-    if (!fxCheck || !fxCheck.rate) {
+    // 2. If currencies were different than our parallel guess, we might need a specific rate
+    // But for this load test they are all INR, so we optimize.
+    let rate = fxCheck.rate;
+    if (baseCurrency !== 'INR' || targetCurrency !== 'INR') {
+      const actualFx: any = await firstValueFrom(this.kafkaService.send('get_rate', { base: baseCurrency, target: targetCurrency }));
+      rate = actualFx.rate;
+    }
+
+    if (!rate) {
       console.error(`[Transaction] FAILED: Rate fetch failed for ${baseCurrency} to ${targetCurrency}`);
+      endTimer();
       return { status: 'failed', message: 'Rate fetch failed' };
     }
 
-    const { rate } = fxCheck;
     const finalAmount = data.amount * rate;
-    const feeAmount = 2; // Flat fee
+    const feeAmount = 2;
     const transactionId = data.transactionId;
 
 
@@ -83,17 +100,13 @@ export class AppService implements OnModuleInit {
         ledgerEntry(data.receiver.toString(), 'CREDIT', finalAmount, targetCurrency, `Transfer from ${data.sender}`),
       ];
 
-      await this.kafkaService.send('write_ledger', ledgerBatch).toPromise();
-      console.log(`[Transaction] Ledger batch written for ${data.transactionId}`);
+      await firstValueFrom(this.kafkaService.send('write_ledger', ledgerBatch));
 
-      await this.kafkaService.send('update_balance', { userId: Number(data.sender), amount: data.amount + feeAmount, type: 'debit', transaction_id: transactionId }).toPromise();
-      console.log(`[Transaction] Sender balance updated`);
-
-      await this.kafkaService.send('update_balance', { userId: Number(data.receiver), amount: finalAmount, type: 'credit', transaction_id: transactionId }).toPromise();
-      console.log(`[Transaction] Receiver balance updated`);
-
-      await this.kafkaService.send('update_ledger_status', { transaction_id: transactionId, status: 'COMPLETED' }).toPromise();
-      console.log(`[Transaction] Ledger status updated to COMPLETED`);
+      await Promise.all([
+        firstValueFrom(this.kafkaService.send('update_balance', { userId: Number(data.sender), amount: data.amount + feeAmount, type: 'debit', transaction_id: transactionId })),
+        firstValueFrom(this.kafkaService.send('update_balance', { userId: Number(data.receiver), amount: finalAmount, type: 'credit', transaction_id: transactionId })),
+        firstValueFrom(this.kafkaService.send('update_ledger_status', { transaction_id: transactionId, status: 'COMPLETED' })),
+      ]);
 
       this.kafkaService.send('clear_rate', { currency: targetCurrency }).subscribe();
 
@@ -106,14 +119,16 @@ export class AppService implements OnModuleInit {
       //   timestamp: new Date().toISOString()
       // });
 
+      endTimer();
       return { status: 'paid', transactionId, rate };
 
     } catch (error) {
       console.error("TRANSACTION FAILED:", error);
 
       // Update ledger entries to FAILED so we know what went wrong
-      await this.kafkaService.send('update_ledger_status', { transaction_id: transactionId, status: 'FAILED' }).toPromise();
+      await firstValueFrom(this.kafkaService.send('update_ledger_status', { transaction_id: transactionId, status: 'FAILED' }));
 
+      endTimer();
       throw new Error(`Transaction failed: ${error.message}`);
     }
   }

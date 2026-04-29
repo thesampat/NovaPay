@@ -1,8 +1,9 @@
 import { Module } from '@nestjs/common';
-import { PrometheusModule } from '@willsoto/nestjs-prometheus';
+import { PrometheusModule, makeHistogramProvider } from '@willsoto/nestjs-prometheus';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ClientsModule, Transport } from '@nestjs/microservices';
+import * as crypto from 'crypto';
 
 @Module({
   imports: [
@@ -31,13 +32,20 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
             brokers: [process.env.SERVICE_NAME ? 'kafka:29092' : 'localhost:9092'],
           },
           consumer: {
-            groupId: 'transaction-client-group',
+            groupId: `transaction-client-group-${crypto.randomUUID()}`,
           },
         },
       }
     ]),
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    makeHistogramProvider({
+      name: 'transaction_latency_seconds',
+      help: 'Latency of complete transactions from start to ledger update',
+      buckets: [0.1, 0.5, 1, 2, 5],
+    }),
+  ],
 })
 export class AppModule { }

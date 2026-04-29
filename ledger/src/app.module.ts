@@ -8,7 +8,7 @@ import { LedgerSchema } from './ledger.schema';
 @Module({
   imports: [
     PrometheusModule.register(),
-    MongooseModule.forRoot(process.env.SERVICE_NAME ? 'mongodb://mongodb:27017/ledger?replicaSet=rs0&directConnection=true' : 'mongodb://localhost:27017/ledger?replicaSet=rs0&directConnection=true'),
+    MongooseModule.forRoot(process.env.SERVICE_NAME ? 'mongodb://mongodb:27017/ledger?replicaSet=rs0&directConnection=true' : 'mongodb://localhost:27017/ledger?replicaSet=rs0&directConnection=true', { maxPoolSize: 100 }),
     MongooseModule.forFeature([{ name: 'Ledger', schema: LedgerSchema }])
   ],
   controllers: [AppController],

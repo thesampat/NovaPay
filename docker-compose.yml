@@ -4,7 +4,7 @@ services:
   # Databases & Cache
   mongodb:
     image: mongo:latest
-    command: ["--replSet", "rs0", "--bind_ip_all"]
+    # command: ["--replSet", "rs0", "--bind_ip_all"]
     volumes:
       - mongodb_data:/data/db
     ports:
@@ -41,6 +41,7 @@ services:
       - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
       - KAFKA_LOG_DIRS=/tmp/kraft-combined-logs
       - KAFKA_AUTO_CREATE_TOPICS_ENABLE=true
+      - KAFKA_NUM_PARTITIONS=10
       - KAFKA_MESSAGE_MAX_BYTES=20000000
       - KAFKA_REPLICA_FETCH_MAX_BYTES=20000000
     networks:
@@ -106,9 +107,9 @@ services:
     image: jaegertracing/all-in-one:latest
     container_name: jaeger
     ports:
-      - "16686:16686" # Jaeger UI
-      - "4317:4317"   # OTLP gRPC
-      - "4318:4318"   # OTLP HTTP
+      - "16686:16686" 
+      - "4317:4317"   
+      - "4318:4318"  
     networks:
       - app-network
     restart: always
@@ -130,10 +131,10 @@ services:
       - ./gateway/src:/usr/src/app/src
     depends_on:
       - user-wallet
-      - transaction
-      - payroll
-      - fx
-      - ledger
+      # - transaction
+      # - payroll
+      # - fx
+      # - ledger
     networks:
       - app-network
 
@@ -142,10 +143,12 @@ services:
       context: ./user-wallet
       target: builder
     command: npm run start:dev
+    deploy:
+      replicas: 6
     environment:
       - SERVICE_NAME=user-wallet
     ports:
-      - "3001:3001"
+      - "3001"
     volumes:
       - ./user-wallet/src:/usr/src/app/src
     depends_on:
@@ -159,10 +162,12 @@ services:
       context: ./transaction
       target: builder
     command: npm run start:dev
+    deploy:
+      replicas: 6
     environment:
       - SERVICE_NAME=transaction
     ports:
-      - "3002:3002"
+      - "3002"
     volumes:
       - ./transaction/src:/usr/src/app/src
     depends_on:
@@ -178,10 +183,12 @@ services:
       context: ./ledger
       target: builder
     command: npm run start:dev
+    deploy:
+      replicas: 6
     environment:
       - SERVICE_NAME=ledger
     ports:
-      - "3003:3003"
+      - "3003"
     volumes:
       - ./ledger/src:/usr/src/app/src
     depends_on:
@@ -194,10 +201,12 @@ services:
       context: ./fx
       target: builder
     command: npm run start:dev
+    deploy:
+      replicas: 6
     environment:
       - SERVICE_NAME=fx
     ports:
-      - "3004:3004"
+      - "3004"
     volumes:
       - ./fx/src:/usr/src/app/src
     depends_on:
@@ -210,10 +219,12 @@ services:
       context: ./payroll
       target: builder
     command: npm run start:dev
+    deploy:
+      replicas: 1
     environment:
       - SERVICE_NAME=payroll
     ports:
-      - "3005:3005"
+      - "3005"
     volumes:
       - ./payroll/src:/usr/src/app/src
     depends_on:

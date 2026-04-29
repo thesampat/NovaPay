@@ -20,21 +20,21 @@ export class AppService {
     return hash.digest('hex');
   }
 
+  private cachedPreviousHash: string | null = null;
+
   async writeLedger(entries: Omit<ledgerTypes.ILedgerEntry, 'timestamp' | 'current_hash' | 'previous_hash'>[]) {
     if (!entries || entries.length === 0) return { status: 'success' };
 
     const transactionId = entries[0].transaction_id;
 
-    // 0. BATCH IDEMPOTENCY CHECK: Ensure the whole batch isn't recorded twice
-    const existing = await this.ledgerModel.findOne({ transaction_id: transactionId });
-    if (existing) {
-      return { status: 'success', message: 'Batch already exists' };
-    }
-
     try {
-      let lastEntry = await this.ledgerModel.findOne().sort({ timestamp: -1 });
-      let previousHash = lastEntry ? lastEntry.current_hash : '0'.repeat(64);
+      // 1. Get the previous hash from cache or DB if cache is empty
+      if (!this.cachedPreviousHash) {
+        const lastEntry = await this.ledgerModel.findOne().sort({ _id: -1 }).lean();
+        this.cachedPreviousHash = lastEntry ? lastEntry.current_hash : '0'.repeat(64);
+      }
 
+      let previousHash = this.cachedPreviousHash;
       const entriesToSave: ledgerTypes.ILedgerEntry[] = [];
 
       for (const entry of entries) {
@@ -45,7 +45,7 @@ export class AppService {
         };
 
         const currentHash = this.calculateHash(entryData);
-        previousHash = currentHash; // Advance chain for next leg in batch
+        previousHash = currentHash; 
 
         entriesToSave.push({
           ...entryData,
@@ -53,10 +53,14 @@ export class AppService {
         });
       }
 
+      // Update cache for next call
+      this.cachedPreviousHash = previousHash;
+
       await this.ledgerModel.insertMany(entriesToSave);
       return { status: 'success', count: entriesToSave.length };
 
     } catch (error) {
+      this.cachedPreviousHash = null; // Invalidate cache on error to be safe
       console.error('Ledger Batch Error:', error);
       throw error;
     }

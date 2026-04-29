@@ -6,7 +6,7 @@ import { InjectMetric } from '@willsoto/nestjs-prometheus';
 import { Counter } from 'prom-client';
 import { firstValueFrom } from 'rxjs';
 
-@Processor('payroll-engine', { concurrency: 100 })
+@Processor('payroll-engine', { concurrency: 500 })
 export class PayrollProcessor extends WorkerHost implements OnModuleInit {
   private readonly logger = new Logger(PayrollProcessor.name);
 

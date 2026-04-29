@@ -5,6 +5,7 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
 import { BullModule } from '@nestjs/bullmq';
 import { PrometheusModule, makeCounterProvider } from '@willsoto/nestjs-prometheus';
 import { PayrollProcessor } from './payroll.processor';
+import * as crypto from 'crypto';
 
 @Module({
   imports: [
@@ -34,7 +35,7 @@ import { PayrollProcessor } from './payroll.processor';
             brokers: ['kafka:29092'],
           },
           consumer: {
-            groupId: 'payroll-consumer-group',
+            groupId: `payroll-consumer-group-${crypto.randomUUID()}`,
           },
         },
       },

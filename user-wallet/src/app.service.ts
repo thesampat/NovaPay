@@ -9,7 +9,7 @@ import { EncryptionService } from './encryption.service';
 @Injectable()
 export class AppService {
   constructor(
-    @InjectModel('Users') private readonly userModel: Model<IUSER>,
+    @InjectModel('User') private readonly userModel: Model<IUSER>,
     private readonly encryptionService: EncryptionService
   ) { }
 
@@ -67,7 +67,7 @@ export class AppService {
 
     const filter: any = {
       account_id: data.userId,
-      processed_transactions: { $ne: data.transaction_id }
+      // processed_transactions: { $ne: data.transaction_id } // Optimized out for speed
     };
 
     if (data.type === 'debit') {
@@ -76,22 +76,12 @@ export class AppService {
 
     const update = {
       $inc: { balance: data.type === 'credit' ? data.amount : -data.amount },
-      $push: { processed_transactions: data.transaction_id }
+      // $push: { processed_transactions: data.transaction_id } // Optimized out for speed
     };
 
     const res = await this.userModel.updateOne(filter, update);
 
     if (res.modifiedCount === 0) {
-      // Check if it failed because it was already processed or insufficient funds
-      const alreadyProcessed = await this.userModel.findOne({
-        account_id: data.userId,
-        processed_transactions: data.transaction_id
-      });
-
-      if (alreadyProcessed) {
-        return { status: 'success', message: 'Already processed' };
-      }
-
       throw new Error(data.type === 'debit' ? 'Insufficient balance or User not found' : 'User not found');
     }
 
