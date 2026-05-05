@@ -33,18 +33,15 @@ async function seed() {
     console.log('Cleaning existing users...');
     await UserModel.deleteMany({});
 
-    console.log('Generating 1000 users (IDs 1-1000)...');
     const users: any[] = [];
     for (let i = 1; i <= 1000; i++) {
       users.push({
         account_id: i,
-        balance: i === 1 ? 1000000 : 1000, // ID 1 is the employer/sender with 1M, others have 1000
+        balance: i === 1 ? 1000000 : 1000,
         currency: i === 1 ? 'USD' : currencies[Math.floor(Math.random() * currencies.length)],
         processed_transactions: [],
-        // We leave encrypted fields undefined as they are optional in the schema
       });
 
-      // Insert in batches of 100 to avoid memory issues if it were much larger
       if (users.length === 100) {
         await UserModel.insertMany(users);
         users.length = 0;

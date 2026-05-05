@@ -35,32 +35,36 @@ export class PayrollProcessor extends WorkerHost implements OnModuleInit {
     }
   }
 
+  /*
+    job is batched
+    previous - job.data =  {sender, receiver, amount}
+    after batching - job.data =  [{}}, {}]
+   */
+
   private async handlePayment(job: Job) {
-    this.logger.log(`💸 [Job ${job.id}] Transferring ${job.data.amount} to receiver ${job.data.receiver}`);
-    
     // Commands the Courier (Kafka) to coordinate with User-Wallet & Transaction Services
     try {
-        const result = await firstValueFrom(
-            this.kafkaService.send('transfer_amount', job.data)
-        );
-        
-        // 🛎️ Increment Success Metric
-        this.paymentCounter.inc({ status: 'success' });
-        
-        return result;
+      const result = await firstValueFrom(
+        this.kafkaService.send('transfer_amount', job.data)
+      );
+
+      // 🛎️ Increment Success Metric
+      this.paymentCounter.inc({ status: 'success' });
+
+      return result;
     } catch (err) {
-        this.logger.error(`Failed to execute payment for ${job.data.receiver}: ${err.message}`);
-        
-        // 🛎️ Increment Failure Metric
-        this.paymentCounter.inc({ status: 'failure' });
-        
-        throw err; // Trigger BullMQ retry
+      this.logger.error(`Failed to execute payment for ${job.data.transactionId}: ${err.message}`);
+
+      // 🛎️ Increment Failure Metric
+      this.paymentCounter.inc({ status: 'failure' });
+
+      throw err; // Trigger BullMQ retry
     }
   }
 
   private async handleBatchCompletion(job: Job) {
     this.logger.log(`🏆 [Job ${job.id}] Batch ${job.data.batchId} has been successfully distributed!`);
-    
+
     // Optional: Emit a 'payroll.certified' event here for the Ledger
     return { status: 'completed', timestamp: new Date().toISOString() };
   }

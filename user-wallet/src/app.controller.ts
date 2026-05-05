@@ -28,7 +28,7 @@ export class AppController {
   }
 
   @MessagePattern('update_balance')
-  async updateBalance(data: { userId: number, amount: number, type: 'debit' | 'credit', transaction_id: string }) {
+  async updateBalance(data: { userId: string, amount: number, type: 'debit' | 'credit', transaction_id: string }[]) {
     return this.appService.updateBalance(data);
   }
 
@@ -38,7 +38,7 @@ export class AppController {
   }
 
   @MessagePattern('get_currency')
-  async getCurrency(data: { sender: number, receiver: number }) {
-    return this.appService.getCurrency(data.sender, data.receiver);
+  async getCurrency(users) {
+    return this.appService.getCurrency(users);
   }
 }

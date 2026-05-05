@@ -1,6 +1,5 @@
 export interface IPayLoad {
     sender: number,
-    receiver: number,
-    amount: number,
+    payload: [],
     transactionId: string
 }

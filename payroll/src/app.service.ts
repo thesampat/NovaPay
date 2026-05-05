@@ -33,6 +33,7 @@ export class AppService implements OnModuleInit {
       };
     }
 
+
     const balanceInfo: any = await firstValueFrom(
       this.kafkaService.send('get_balance', { userId: data.sender })
     );
@@ -45,22 +46,30 @@ export class AppService implements OnModuleInit {
 
     this.batchCounter.inc();
 
+    const chunkSize = 50;
+
+    const chunks: any = [];
+    for (let i = 0; i < data.paylist.length; i += chunkSize) {
+      chunks.push(data.paylist.slice(i, i + chunkSize));
+    }
+
+    // [[{}, {}], [{}, {}]]
+
     await this.flowProducer.add({
       name: 'batch-complete',
       queueName: 'payroll-engine',
       data: { batchId: data.idempotencyKey, sender: data.sender },
       opts: { jobId: `batch_${data.idempotencyKey}` },
-      children: (data.paylist || []).map(emp => ({
+      children: (chunks || []).map(chunkdata => ({
         name: 'individual-payment',
         queueName: 'payroll-engine',
         data: {
           sender: data.sender,
-          receiver: emp.receiver,
-          amount: emp.amount,
-          transactionId: `${data.idempotencyKey}_${emp.receiver}`
+          payload: chunkdata,
+          transactionId: `${data.idempotencyKey}_${chunkdata?.[0].receiver}`
         },
         opts: {
-          jobId: `pay_${data.idempotencyKey}_${emp.receiver}`,
+          jobId: `pay_${data.idempotencyKey}_${chunkdata?.[0].receiver}`,
           attempts: 3,
           backoff: { type: 'exponential', delay: 2000 }
         }

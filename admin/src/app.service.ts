@@ -88,6 +88,35 @@ export class AppService {
   async getPlatformStats() {
     const totalUsers = await this.userModel.countDocuments();
     const ledgerCount = await this.ledgerModel.countDocuments();
-    return { totalUsers, ledgerCount };
+    
+    let latencyStats = { latencyMs: 0, latencySeconds: 0, latencyMinutes: 0 };
+    if (ledgerCount > 0) {
+      const result = await this.ledgerModel.aggregate([
+        {
+          $group: {
+            _id: null,
+            firstTimestamp: { $min: "$timestamp" },
+            lastTimestamp: { $max: "$timestamp" }
+          }
+        },
+        {
+          $project: {
+            _id: 0,
+            latencyMs: { $subtract: ["$lastTimestamp", "$firstTimestamp"] }
+          }
+        }
+      ]);
+
+      if (result.length > 0 && result[0].latencyMs) {
+        const ms = result[0].latencyMs;
+        latencyStats = {
+          latencyMs: ms,
+          latencySeconds: Number((ms / 1000).toFixed(2)),
+          latencyMinutes: Number((ms / 60000).toFixed(2))
+        };
+      }
+    }
+
+    return { totalUsers, ledgerCount, ...latencyStats };
   }
 }

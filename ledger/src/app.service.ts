@@ -25,10 +25,8 @@ export class AppService {
   async writeLedger(entries: Omit<ledgerTypes.ILedgerEntry, 'timestamp' | 'current_hash' | 'previous_hash'>[]) {
     if (!entries || entries.length === 0) return { status: 'success' };
 
-    const transactionId = entries[0].transaction_id;
-
+    console.log('init write ledger')
     try {
-      // 1. Get the previous hash from cache or DB if cache is empty
       if (!this.cachedPreviousHash) {
         const lastEntry = await this.ledgerModel.findOne().sort({ _id: -1 }).lean();
         this.cachedPreviousHash = lastEntry ? lastEntry.current_hash : '0'.repeat(64);
@@ -45,7 +43,7 @@ export class AppService {
         };
 
         const currentHash = this.calculateHash(entryData);
-        previousHash = currentHash; 
+        previousHash = currentHash;
 
         entriesToSave.push({
           ...entryData,
@@ -53,10 +51,11 @@ export class AppService {
         });
       }
 
-      // Update cache for next call
       this.cachedPreviousHash = previousHash;
 
+      console.log('processed batch creation')
       await this.ledgerModel.insertMany(entriesToSave);
+      console.log('ledger written ')
       return { status: 'success', count: entriesToSave.length };
 
     } catch (error) {

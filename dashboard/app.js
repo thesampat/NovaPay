@@ -6,7 +6,7 @@ async function fetchData(endpoint, method = 'GET', body = null) {
         headers: { 'Content-Type': 'application/json' },
     };
     if (body) options.body = JSON.stringify(body);
-    
+
     try {
         const response = await fetch(`${API_BASE}${endpoint}`, options);
         return await response.json();
@@ -26,9 +26,28 @@ function showToast(message) {
 
 async function refreshStats() {
     const stats = await fetchData('/admin/stats');
+
+    console.log('states played', stats)
+
     if (stats) {
-        document.getElementById('stat-users').textContent = stats.totalUsers || 0;
-        document.getElementById('stat-ledgers').textContent = stats.ledgerCount || 0;
+        document.getElementById('stat-users').textContent = stats.totalUsers ?? 0;
+        document.getElementById('stat-ledgers').textContent = stats.ledgerCount ?? 0;
+
+        if (document.getElementById('stat-total-time')) {
+            document.getElementById('stat-total-time').textContent = stats.latencySeconds ?? 0;
+        }
+        if (document.getElementById('stat-total-time-min')) {
+            document.getElementById('stat-total-time-min').textContent = stats.latencyMinutes ?? 0;
+        }
+        if (document.getElementById('stat-latency')) {
+            document.getElementById('stat-latency').textContent = stats.latencyMs ?? 0;
+        }
+        if (document.getElementById('stat-tps')) {
+            const txCount = (stats.ledgerCount || 0) / 6;
+            const timeSec = stats.latencySeconds || 0;
+            const tps = timeSec > 0 ? (txCount / timeSec).toFixed(2) : '0.00';
+            document.getElementById('stat-tps').textContent = tps;
+        }
     }
 }
 
@@ -36,7 +55,7 @@ async function loadUsers() {
     const users = await fetchData('/admin/users');
     const tbody = document.querySelector('#users-table tbody');
     tbody.innerHTML = '';
-    
+
     if (users && Array.isArray(users)) {
         users.forEach(user => {
             const tr = document.createElement('tr');
@@ -54,7 +73,7 @@ async function loadLedgers() {
     const ledgers = await fetchData('/admin/ledgers');
     const tbody = document.querySelector('#ledger-table tbody');
     tbody.innerHTML = '';
-    
+
     if (ledgers && Array.isArray(ledgers)) {
         ledgers.forEach(entry => {
             const tr = document.createElement('tr');
@@ -76,10 +95,10 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.content-pane').forEach(p => p.classList.remove('active'));
-        
+
         btn.classList.add('active');
         document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
-        
+
         if (btn.dataset.tab === 'users') loadUsers();
         if (btn.dataset.tab === 'ledger') loadLedgers();
     });

@@ -25,6 +25,8 @@ services:
     image: apache/kafka:latest
     ports:
       - "9092:9092"
+    logging:
+      driver: "none"
     environment:
       # KRaft settings (No Zookeeper needed)
       - KAFKA_NODE_ID=1
@@ -144,7 +146,7 @@ services:
       target: builder
     command: npm run start:dev
     deploy:
-      replicas: 6
+      replicas: 1
     environment:
       - SERVICE_NAME=user-wallet
     ports:
@@ -163,7 +165,7 @@ services:
       target: builder
     command: npm run start:dev
     deploy:
-      replicas: 6
+      replicas: 1
     environment:
       - SERVICE_NAME=transaction
     ports:
@@ -184,7 +186,7 @@ services:
       target: builder
     command: npm run start:dev
     deploy:
-      replicas: 6
+      replicas: 1
     environment:
       - SERVICE_NAME=ledger
     ports:
@@ -202,7 +204,7 @@ services:
       target: builder
     command: npm run start:dev
     deploy:
-      replicas: 6
+      replicas: 1
     environment:
       - SERVICE_NAME=fx
     ports:

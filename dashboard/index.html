@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,6 +8,7 @@
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
+
 <body class="dark-mode">
     <div class="container">
         <header>
@@ -21,6 +23,22 @@
                 <div class="stat-card">
                     <span class="label">Ledger Entries</span>
                     <span class="value" id="stat-ledgers">0</span>
+                </div>
+                <div class="stat-card">
+                    <span class="label">Total Job Time (s)</span>
+                    <span class="value" id="stat-total-time">0</span>
+                </div>
+                <div class="stat-card">
+                    <span class="label">Total Job Time (min)</span>
+                    <span class="value" id="stat-total-time-min">0</span>
+                </div>
+                <div class="stat-card">
+                    <span class="label">Throughput (TPS)</span>
+                    <span class="value" id="stat-tps">0</span>
+                </div>
+                <div class="stat-card">
+                    <span class="label">Latency (ms)</span>
+                    <span class="value" id="stat-latency">0</span>
                 </div>
             </div>
         </header>
@@ -73,4 +91,5 @@
     <div id="toast" class="toast"></div>
     <script src="app.js"></script>
 </body>
+
 </html>

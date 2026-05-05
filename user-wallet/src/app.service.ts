@@ -60,29 +60,49 @@ export class AppService {
     }
   }
 
-  async updateBalance(data: { userId: number, amount: number, type: 'debit' | 'credit', transaction_id: string }) {
-    if (data.type === 'credit' && data.transaction_id?.includes('fail')) {
-      throw new Error('SIMULATED CREDIT FAILURE');
-    }
+  async updateBalance(
+    data: {
+      userId: string;
+      amount: number;
+      type: 'debit' | 'credit';
+      transaction_id: string;
+    }[]
+  ) {
 
-    const filter: any = {
-      account_id: data.userId,
-      // processed_transactions: { $ne: data.transaction_id } // Optimized out for speed
-    };
+    console.log({ datamap: data })
 
-    if (data.type === 'debit') {
-      filter.balance = { $gte: data.amount };
-    }
+    const operations = data.map((item) => {
 
-    const update = {
-      $inc: { balance: data.type === 'credit' ? data.amount : -data.amount },
-      // $push: { processed_transactions: data.transaction_id } // Optimized out for speed
-    };
+      if (item.type === 'credit' && item.transaction_id?.includes('fail')) {
+        throw new Error('SIMULATED CREDIT FAILURE');
+      }
 
-    const res = await this.userModel.updateOne(filter, update);
+      const filter: any = {
+        account_id: item.userId,
+      };
 
-    if (res.modifiedCount === 0) {
-      throw new Error(data.type === 'debit' ? 'Insufficient balance or User not found' : 'User not found');
+      if (item.type === 'debit') {
+        filter.balance = { $gte: item.amount }; // prevent overdraft
+      }
+
+      return {
+        updateOne: {
+          filter,
+          update: {
+            $inc: {
+              balance: item.type === 'credit' ? item.amount : -item.amount,
+            },
+          },
+        },
+      };
+    });
+
+    const result = await this.userModel.bulkWrite(operations, {
+      ordered: false, // important: continue even if some fail
+    });
+
+    if (result.modifiedCount !== data.length) {
+      throw new Error('Some balance updates failed');
     }
 
     return { status: 'success' };
@@ -96,9 +116,17 @@ export class AppService {
     return { processed: !!user };
   }
 
-  async getCurrency(sender, receiver) {
-    let user = await this.userModel.find({ account_id: { $in: [sender, receiver] } }, { currency: 1, account_id: 1, _id: 0 })
-    return user
+  async getCurrency(users: any) {
+    const userIds = Array.isArray(users) ? users : users?.users;
+
+    if (!Array.isArray(userIds)) {
+      throw new Error('Invalid users input');
+    }
+
+    return this.userModel.find(
+      { account_id: { $in: userIds.map(Number) } },
+      { currency: 1, account_id: 1, _id: 0 }
+    );
   }
 
 
