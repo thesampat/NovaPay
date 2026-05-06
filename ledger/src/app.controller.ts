@@ -18,7 +18,7 @@ export class AppController {
   }
 
   @MessagePattern('update_ledger_status')
-  async updateLedgerStatus(data: { transaction_id: string, status: ledgerTypes.ILedgerEntry['status'] }) {
+  async updateLedgerStatus(data: { transaction_ids: string[], status: ledgerTypes.ILedgerEntry['status'] }) {
     return this.appService.updateLedgerStatus(data);
   }
 }

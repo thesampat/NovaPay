@@ -31,11 +31,11 @@ import * as crypto from 'crypto';
         transport: Transport.KAFKA,
         options: {
           client: {
-            clientId: 'payroll',
+            clientId: `payroll-${crypto.randomUUID()}`,
             brokers: ['kafka:29092'],
           },
           consumer: {
-            groupId: `payroll-consumer-group-${crypto.randomUUID()}`,
+            groupId: `payroll-consumer-group-${process?.pid}`,
           },
         },
       },
@@ -43,7 +43,7 @@ import * as crypto from 'crypto';
   ],
   controllers: [AppController],
   providers: [
-    AppService, 
+    AppService,
     PayrollProcessor,
     makeCounterProvider({
       name: 'payroll_batches_total',
@@ -56,4 +56,4 @@ import * as crypto from 'crypto';
     }),
   ],
 })
-export class AppModule {}
+export class AppModule { }

@@ -12,6 +12,8 @@ services:
     networks:
       - app-network
     restart: always
+    logging:
+      driver: "none"
 
   redis:
     image: redis:alpine
@@ -20,13 +22,15 @@ services:
     networks:
       - app-network
     restart: always
+    logging:
+      driver: "none"
 
   kafka:
+    logging:
+      driver: none
     image: apache/kafka:latest
     ports:
       - "9092:9092"
-    logging:
-      driver: "none"
     environment:
       # KRaft settings (No Zookeeper needed)
       - KAFKA_NODE_ID=1
@@ -52,6 +56,21 @@ services:
 
 
 
+  kafka-init:
+    image: apache/kafka:latest
+    depends_on:
+      - kafka
+    networks:
+      - app-network
+    volumes:
+      - ./scripts/create-topics.sh:/create-topics.sh
+    entrypoint: ["/bin/sh", "-c"]
+    command: |
+      "
+      chmod +x /create-topics.sh
+      /create-topics.sh
+      "
+
   # Monitoring & Observability
   prometheus:
     image: prom/prometheus:latest
@@ -62,6 +81,8 @@ services:
     networks:
       - app-network
     restart: always
+    logging:
+      driver: "none"
 
   grafana:
     image: grafana/grafana:latest
@@ -76,7 +97,10 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning
     networks:
       - app-network
+    logging:
+      driver: "none"
     restart: always
+    
 
   kafka-exporter:
     image: danielqsj/kafka-exporter:latest
@@ -112,6 +136,8 @@ services:
       - "16686:16686" 
       - "4317:4317"   
       - "4318:4318"  
+    logging:
+      driver: "none"
     networks:
       - app-network
     restart: always

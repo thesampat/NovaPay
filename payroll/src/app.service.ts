@@ -46,7 +46,7 @@ export class AppService implements OnModuleInit {
 
     this.batchCounter.inc();
 
-    const chunkSize = 50;
+    const chunkSize = 150;
 
     const chunks: any = [];
     for (let i = 0; i < data.paylist.length; i += chunkSize) {

@@ -21,11 +21,6 @@ const isDocker = !!process.env.SERVICE_NAME;
     MongooseModule.forFeature([{ name: 'Users', schema: UserSchema }], 'usersConnection'),
     MongooseModule.forFeature([{ name: 'Ledger', schema: LedgerSchema }], 'ledgerConnection'),
     ClientsModule.register([
-      // {
-      //   name: 'USER_WALLET_SERVICE',
-      //   transport: Transport.TCP,
-      //   options: { host: isDocker ? 'user-wallet' : '127.0.0.1', port: 3001 },
-      // },
       {
         name: 'KAFKA_SERVICE',
         transport: Transport.KAFKA,
@@ -34,7 +29,7 @@ const isDocker = !!process.env.SERVICE_NAME;
             brokers: [process.env.SERVICE_NAME ? 'kafka:29092' : 'localhost:9092'],
           },
           consumer: {
-            groupId: 'transaction-consumer',
+            groupId: `transaction-consumer-${process.pid}`,
           },
         },
       }

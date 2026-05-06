@@ -18,7 +18,7 @@ async function bootstrap() {
       },
       producerOnlyMode: false,
       consumer: {
-        groupId: 'admin-consumer',
+        groupId: `admin-consumer-${process.pid}`,
       },
     },
   });

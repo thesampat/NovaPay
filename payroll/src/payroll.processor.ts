@@ -6,7 +6,7 @@ import { InjectMetric } from '@willsoto/nestjs-prometheus';
 import { Counter } from 'prom-client';
 import { firstValueFrom } from 'rxjs';
 
-@Processor('payroll-engine', { concurrency: 500 })
+@Processor('payroll-engine', { concurrency: 200 })
 export class PayrollProcessor extends WorkerHost implements OnModuleInit {
   private readonly logger = new Logger(PayrollProcessor.name);
 
@@ -38,7 +38,7 @@ export class PayrollProcessor extends WorkerHost implements OnModuleInit {
   /*
     job is batched
     previous - job.data =  {sender, receiver, amount}
-    after batching - job.data =  [{}}, {}]
+    after batching - job.data =  {sender:'', payload:[{receiver:"", amount:""}, ...], transaction_id:"per_payload"}
    */
 
   private async handlePayment(job: Job) {

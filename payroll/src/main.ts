@@ -13,7 +13,7 @@ async function bootstrap() {
         brokers: [process.env.SERVICE_NAME ? 'kafka:29092' : 'localhost:9092'],
       },
       consumer: {
-        groupId: 'payroll-consumer',
+        groupId: `payroll-consumer-${process?.pid}`,
         fromBeginning: true,
       },
     },

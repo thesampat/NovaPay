@@ -65,9 +65,11 @@ export class AppService {
     }
   }
 
-  async updateLedgerStatus(data: { transaction_id: string, status: ledgerTypes.ILedgerEntry['status'] }) {
+  async updateLedgerStatus(data: { transaction_ids: string[], status: ledgerTypes.ILedgerEntry['status'] }) {
+
+    console.log({ DATAINUPDATESTATUS: JSON.stringify(data) })
     try {
-      await this.ledgerModel.updateMany({ transaction_id: data.transaction_id }, { $set: { status: data.status } });
+      await this.ledgerModel.updateMany({ transaction_id: { $in: data.transaction_ids } }, { $set: { status: data.status } });
       return { status: 'success' };
     } catch (error) {
       console.error('Ledger error:', error);

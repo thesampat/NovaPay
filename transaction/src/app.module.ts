@@ -29,10 +29,11 @@ import * as crypto from 'crypto';
         transport: Transport.KAFKA,
         options: {
           client: {
+            clientId: `transaction-consumer-group-${crypto.randomUUID()}`,
             brokers: [process.env.SERVICE_NAME ? 'kafka:29092' : 'localhost:9092'],
           },
           consumer: {
-            groupId: `transaction-client-group-${crypto.randomUUID()}`,
+            groupId: `transaction-client-group`,
           },
         },
       }

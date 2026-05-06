@@ -11,6 +11,7 @@ import { firstValueFrom } from 'rxjs';
 @Injectable()
 export class AppService implements OnModuleInit {
 
+  public fxCache: any = global.fxCache || (global.fxCache = {});
 
 
   constructor(
@@ -37,11 +38,35 @@ export class AppService implements OnModuleInit {
     return 'Hello World! From Transaction';
   }
 
-  private async flushBatch(ledgerBatch: any[], balanceOps: Promise<any>[]) {
+  async getFxRate(
+    baseCurrency: string,
+    targetCurrency: string
+  ): Promise<number> {
+
+    const rateKey = `${baseCurrency}_${targetCurrency}`;
+    const cached = this.fxCache[rateKey];
+
+    if (cached && Date.now() - cached.timestamp > 30000) {
+      console.log(`Using cached FX rate for ${rateKey}`);
+      return cached.rate;
+    }
+
+
+    const rate = cached?.rate || 0 + 1
+
+    this.fxCache[rateKey] = {
+      rate,
+      timestamp: Date.now()
+    };
+
+    return rate;
+  }
+
+  private async flushBatch(ledgerBatch: any[], balanceUpdates: any[]) {
     // Run both in parallel → faster
     await Promise.all([
       firstValueFrom(this.kafkaService.send('write_ledger', ledgerBatch)),
-      Promise.all(balanceOps)
+      firstValueFrom(this.kafkaService.send('update_balance', balanceUpdates))
     ]);
   }
 
@@ -69,9 +94,6 @@ export class AppService implements OnModuleInit {
       this.kafkaService.send('get_currency', { users: userIds })
     );
 
-
-    console.log('is all batch proceed in transaction - get_currency')
-
     if (!users) {
       // || !fxCheck?.rate ignoring fxCheck rate as of now
       endTimer();
@@ -80,11 +102,9 @@ export class AppService implements OnModuleInit {
 
     const userMap = new Map(users.map((u: any) => [u.account_id, u]));
 
-    // ⚡ For now constant (as you said)
-    const rate = 1;
 
     let ledgerBatch: any[] = [];
-    let balanceOps: Promise<any>[] = [];
+    let balanceUpdates: any[] = [];
     let statusBatch: string[] = [];
 
     // since same txId → push once
@@ -95,7 +115,8 @@ export class AppService implements OnModuleInit {
       type: 'DEBIT' | 'CREDIT',
       amount: number,
       currency: string,
-      desc: string
+      desc: string,
+      rate,
     ) => ({
       account_id: accountId,
       transaction_id: transactionId,
@@ -109,6 +130,7 @@ export class AppService implements OnModuleInit {
 
     try {
       for (const data of payload) {
+
         const senderUser: any = userMap.get(Number(sender));
         const receiverUser: any = userMap.get(Number(data.receiver));
 
@@ -120,60 +142,117 @@ export class AppService implements OnModuleInit {
         const baseCurrency = senderUser.currency;
         const targetCurrency = receiverUser.currency;
 
-        const finalAmount = data.amount * rate;
-        const feeAmount = 2;
-
-        // 3. Ledger entries
-        ledgerBatch.push(
-          ledgerEntry(sender.toString(), 'DEBIT', data.amount, baseCurrency, `To ${data.receiver}`),
-          ledgerEntry(`SETTLEMENT_POOL_${baseCurrency}`, 'CREDIT', data.amount, baseCurrency, `From ${sender}`),
-
-          ledgerEntry(sender.toString(), 'DEBIT', feeAmount, baseCurrency, `Fee`),
-          ledgerEntry('PLATFORM_FEE_ACCOUNT', 'CREDIT', feeAmount, baseCurrency, `Fee`),
-
-          ledgerEntry(`SETTLEMENT_POOL_${targetCurrency}`, 'DEBIT', finalAmount, targetCurrency, `To ${data.receiver}`),
-          ledgerEntry(data.receiver.toString(), 'CREDIT', finalAmount, targetCurrency, `From ${sender}`)
+        // SAME currency transfer
+        const rate = await this.getFxRate(
+          'INR',
+          "INR"
         );
 
-        // 4. Balance ops
-        balanceOps.push(
-          firstValueFrom(this.kafkaService.send('update_balance', {
+
+        // Fetch FX rate only if currencies differ
+
+
+        const feeAmount = 2;
+
+        // Converted amount
+        const finalAmount = Number((data.amount * rate).toFixed(2));
+
+        // Ledger entries
+        ledgerBatch.push(
+
+          // Sender debit
+          ledgerEntry(
+            sender.toString(),
+            'DEBIT',
+            data.amount,
+            baseCurrency,
+            `To ${data.receiver}`,
+            rate,
+          ),
+
+          // Settlement pool receives sender currency
+          ledgerEntry(
+            `SETTLEMENT_POOL_${baseCurrency}`,
+            'CREDIT',
+            data.amount,
+            baseCurrency,
+            `From ${sender}`,
+            rate
+          ),
+
+          // Platform fee
+          ledgerEntry(
+            sender.toString(),
+            'DEBIT',
+            feeAmount,
+            baseCurrency,
+            `Fee`,
+            rate
+          ),
+
+          ledgerEntry(
+            'PLATFORM_FEE_ACCOUNT',
+            'CREDIT',
+            feeAmount,
+            baseCurrency,
+            `Fee`,
+            rate
+          ),
+
+          // Settlement pool converts and sends target currency
+          ledgerEntry(
+            `SETTLEMENT_POOL_${targetCurrency}`,
+            'DEBIT',
+            finalAmount,
+            targetCurrency,
+            `FX ${rate} To ${data.receiver}`,
+            rate
+          ),
+
+          // Receiver gets converted amount
+          ledgerEntry(
+            data.receiver.toString(),
+            'CREDIT',
+            finalAmount,
+            targetCurrency,
+            `From ${sender} FX ${rate}`,
+            rate
+          )
+        );
+
+        // Balance updates
+        balanceUpdates.push(
+          {
             userId: Number(sender),
             amount: data.amount + feeAmount,
             type: 'debit',
             transaction_id: transactionId
-          })),
-          firstValueFrom(this.kafkaService.send('update_balance', {
+          },
+          {
             userId: Number(data.receiver),
             amount: finalAmount,
             type: 'credit',
             transaction_id: transactionId
-          }))
+          }
         );
-
-        console.log('is all batch proceed in transaction')
-        // 5. Flush batch (50)
-
-        await this.flushBatch(ledgerBatch, balanceOps);
-        ledgerBatch = [];
-        balanceOps = [];
-
       }
 
+      await this.flushBatch(ledgerBatch, balanceUpdates);
 
-      // 7. Bulk status update (ONLY after success)
-      // await firstValueFrom(
-      //   this.kafkaService.send('update_ledger_status', {
-      //     transaction_ids: [...new Set(statusBatch)],
-      //     status: 'COMPLETED'
-      //   })
-      // );
+      // 7. Bulk status update(ONLY after success)
 
-      // this.kafkaService.emit('clear_rate', {}).subscribe();
+      await firstValueFrom(
+        this.kafkaService.send('update_ledger_status', {
+          transaction_ids: [...new Set(statusBatch)],
+          status: 'COMPLETED'
+        })
+      );
+
+      this.kafkaService.emit('clear_rate', {}).subscribe();
 
       endTimer();
 
-      return { status: 'paid', transactionId, rate };
+      return { status: 'paid', transactionId };
 
     } catch (error) {
       console.error("TRANSACTION FAILED:", error);

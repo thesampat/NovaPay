@@ -69,8 +69,6 @@ export class AppService {
     }[]
   ) {
 
-    console.log({ datamap: data })
-
     const operations = data.map((item) => {
 
       if (item.type === 'credit' && item.transaction_id?.includes('fail')) {
@@ -98,7 +96,7 @@ export class AppService {
     });
 
     const result = await this.userModel.bulkWrite(operations, {
-      ordered: false, // important: continue even if some fail
+      ordered: false,
     });
 
     if (result.modifiedCount !== data.length) {

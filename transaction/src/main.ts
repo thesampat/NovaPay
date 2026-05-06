@@ -15,7 +15,7 @@ async function bootstrap() {
         brokers: [process.env.SERVICE_NAME ? 'kafka:29092' : 'localhost:9092'],
       },
       consumer: {
-        groupId: 'transaction-server-group',
+        groupId: `transaction-server-group-${process?.pid}`,
         fromBeginning: true,
       },
     },
